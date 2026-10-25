@@ -104,11 +104,11 @@
       const box = $('#v-isi', el);
       if (!r.success) { box.innerHTML = '<h2 style="margin-top:0">Dokumen tidak ditemukan</h2><p class="muted">' + esc(r.message) + '</p><p class="kecil muted">Kode: <span class="mono">' + esc(kode) + '</span></p>'; return; }
       const d = r.data, sah = d.status === 'SAH';
-      box.innerHTML = '<div class="cap ' + (sah ? 'sah' : 'tarik') + '">' + ik(sah ? 'cek' : 'awas') + (sah ? 'Dokumen sah' : 'Dokumen ditarik') + '</div>' +
+      box.innerHTML = '<div class="cap ' + (sah ? 'sah' : 'tarik') + '">' + ik(sah ? 'cek' : 'awas') + (sah ? 'Dokumen sah' : d.status === 'DIGANTI' ? 'Dokumen sudah diganti' : 'Dokumen ditarik') + '</div>' +
         '<dl style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px;margin:18px 0">' +
         '<dt class="muted">Jenis</dt><dd style="margin:0"><b>' + esc(d.judul) + '</b></dd><dt class="muted">Atas nama</dt><dd style="margin:0">' + esc(d.subjek) + '</dd>' +
         '<dt class="muted">Diterbitkan</dt><dd style="margin:0">' + fmt.tgl(d.terbit) + '</dd><dt class="muted">Penerbit</dt><dd style="margin:0">' + esc(d.sekolah) + '</dd>' +
-        '<dt class="muted">Nomor</dt><dd style="margin:0" class="mono">' + esc(d.id) + '</dd>' + (d.catatan ? '<dt class="muted">Alasan ditarik</dt><dd style="margin:0">' + esc(d.catatan) + '</dd>' : '') + '</dl>' +
+        '<dt class="muted">Nomor</dt><dd style="margin:0" class="mono">' + esc(d.id) + '</dd>' + (d.catatan ? '<dt class="muted">' + (d.status === 'DIGANTI' ? 'Keterangan' : 'Alasan ditarik') + '</dt><dd style="margin:0">' + esc(d.catatan) + '</dd>' : '') + '</dl>' +
         (d.hash ? '<div class="alert info">' + ik('info') + '<div>Pastikan berkas PDF yang Anda pegang tidak diubah: pilih berkasnya di bawah ini. Pengecekan berjalan di perangkat Anda, berkas tidak diunggah.</div></div>' +
           '<input type="file" accept="application/pdf" id="v-pdf" class="inp"><p id="v-hasil" class="kecil" style="margin-top:10px"></p>' : '');
       const inp = $('#v-pdf', el);

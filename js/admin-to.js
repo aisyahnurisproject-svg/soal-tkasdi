@@ -134,26 +134,39 @@
       : '<div class="kosong"><strong>Paket masih kosong</strong>Tambahkan soal disetujui dari bank, atau susun otomatis berdasarkan kisi-kisi.</div>';
   }
   function pemilihSoal(el) {
-    const D = el.det, ada = new Set(D.items.map((x) => x.id));
+    const D = el.det, ada = new Set(D.items.map((x) => x.id)), terpilih = new Set();
     const kandidat = (App.data.soal || []).filter((s) => s.status === 'disetujui' && s.mapel === D.meta.mapel && !ada.has(s.id));
     const m = modal({ judul: 'Tambah soal dari bank — ' + D.meta.mapel, ukuran: 'xl', isi: '<div class="saring"><input class="inp cari" id="ps-cari" placeholder="Cari…"><select class="inp" id="ps-komp">' + opsi(Admin.kompMapel(D.meta.mapel).map((k) => ({ v: k.id, l: k.nama })), '', 'Semua kompetensi') + '</select>' +
       '<select class="inp" id="ps-bentuk">' + opsi(Object.keys(BENTUK_LABEL).map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua bentuk') + '</select><select class="inp" id="ps-kes">' + opsi(['mudah', 'sedang', 'sulit'], '', 'Semua kesulitan') + '</select></div>' +
-      '<p class="kecil muted">Soal dengan stimulus kelompok ditambahkan bersama soal saudaranya.</p><div class="tbl-wrap" style="max-height:52vh"><table class="tbl"><thead><tr><th></th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th>Kesulitan</th></tr></thead><tbody id="ps-isi"></tbody></table></div>',
+      '<p class="kecil muted">Soal dengan stimulus kelompok ditambahkan bersama soal saudaranya. <b id="ps-n">0 soal dipilih</b></p><div class="tbl-wrap" style="max-height:52vh"><table class="tbl"><thead><tr><th class="cek-sel"><input type="checkbox" id="ps-semua" aria-label="Pilih semua yang tampil"></th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th>Kesulitan</th></tr></thead><tbody id="ps-isi"></tbody></table></div>',
       tombol: [{ label: 'Batal' }, { label: 'Tambahkan terpilih', kelas: 'utama', aksi: (mm) => {
-        const pilih = new Set($$('[data-ps]:checked', mm).map((x) => x.dataset.ps));
+        const pilih = new Set(terpilih);
+        if (!pilih.size) { toast('Belum ada soal yang dicentang.', 'warn'); return false; }
         Array.from(pilih).forEach((id) => { const s = kandidat.find((x) => x.id === id); if (s && s.stim) kandidat.filter((x) => x.stim === s.stim).forEach((x) => pilih.add(x.id)); });
         pilih.forEach((id) => { if (!ada.has(id)) D.items.push({ id, bobot: 1 }); });
         D.ubah = true; renderSusunan(el);
         toast(pilih.size + ' soal ditambahkan. Tekan Simpan susunan.', 'ok');
       } }] });
+    const hitungPilih = () => { $('#ps-n', m.el).textContent = terpilih.size + ' soal dipilih'; };
     const isi = () => {
       const q = $('#ps-cari', m.el).value.toLowerCase(), k = $('#ps-komp', m.el).value, b = $('#ps-bentuk', m.el).value, ks = $('#ps-kes', m.el).value;
+      $('#ps-semua', m.el).checked = false;
       $('#ps-isi', m.el).innerHTML = kandidat.filter((s) => (!q || (s.id + s.ring).toLowerCase().indexOf(q) >= 0) && (!k || s.idk === k) && (!b || s.bentuk === b) && (!ks || s.kes === ks)).slice(0, 300)
-        .map((s) => '<tr><td><input type="checkbox" data-ps="' + esc(s.id) + '"></td><td><span class="chip-id">' + esc(s.id) + '</span>' + (s.stim ? ' <span class="lencana polos">' + esc(s.stim) + '</span>' : '') + '<div class="ringkas kecil">' + esc(s.ring) + '</div></td><td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td><td>' + esc(s.kes) + '</td></tr>').join('') ||
+        .map((s) => '<tr class="klik" data-baris="' + esc(s.id) + '"><td><input type="checkbox" data-ps="' + esc(s.id) + '"' + (terpilih.has(s.id) ? ' checked' : '') + '></td><td><span class="chip-id">' + esc(s.id) + '</span>' + (s.stim ? ' <span class="lencana polos">' + esc(s.stim) + '</span>' : '') + '<div class="ringkas kecil">' + esc(s.ring) + '</div></td><td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td><td>' + esc(s.kes) + '</td></tr>').join('') ||
         '<tr><td colspan="5" class="kosong">Tidak ada soal disetujui yang cocok.</td></tr>';
     };
     isi();
-    m.el.addEventListener('input', debounce(isi, 200));
+    $('#ps-cari', m.el).addEventListener('input', debounce(isi, 200));
+    ['#ps-komp', '#ps-bentuk', '#ps-kes'].forEach((sel) => $(sel, m.el).addEventListener('change', isi));
+    m.el.addEventListener('change', (e) => {
+      if (e.target.dataset.ps) { e.target.checked ? terpilih.add(e.target.dataset.ps) : terpilih.delete(e.target.dataset.ps); hitungPilih(); }
+      if (e.target.id === 'ps-semua') { $$('[data-ps]', m.el).forEach((c) => { c.checked = e.target.checked; c.checked ? terpilih.add(c.dataset.ps) : terpilih.delete(c.dataset.ps); }); hitungPilih(); }
+    });
+    m.el.addEventListener('click', (e) => {
+      const tr = e.target.closest('[data-baris]');
+      if (!tr || e.target.matches('input')) return;
+      const c = tr.querySelector('[data-ps]'); c.checked = !c.checked; c.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
   function susunOtomatis(el) {
     const D = el.det, komp = Admin.kompMapel(D.meta.mapel);
@@ -290,7 +303,7 @@
     judul: 'Hasil & Analisis', ikon: 'hasil', grup: 'Pelaksanaan & evaluasi', peran: SEMUA,
     render(el) {
       el.innerHTML = Admin.kepala('Hasil & analisis', 'Rekap nilai, penguasaan kompetensi per siswa dan kelas, serta kualitas butir soal.', '<select class="inp" id="h-paket" style="min-width:260px"></select>') +
-        '<div class="tab" id="h-tab"><button data-ht="rekap" class="aktif">Rekap</button><button data-ht="siswa">Per siswa</button><button data-ht="kelas">Per kelas</button><button data-ht="butir">Butir soal</button></div><div id="h-isi"></div>';
+        '<div class="tab" id="h-tab" role="tablist"><button type="button" data-ht="rekap" class="aktif">Rekap</button><button type="button" data-ht="siswa">Per siswa</button><button type="button" data-ht="kelas">Per kelas</button><button type="button" data-ht="butir">Butir soal</button></div><div id="h-isi"></div>';
       el.tab = 'rekap';
       $('#h-paket', el).onchange = () => { el.rekap = null; el.siswa = null; muatHasil(el); };
       el.addEventListener('click', (e) => aksiHasil(el, e));
@@ -307,15 +320,24 @@
   });
   async function muatHasil(el, paksa) {
     const id = $('#h-paket', el).value;
-    if (!id) return;
-    $('#h-isi', el).innerHTML = '<div class="memuat">Memuat hasil…</div>';
-    await swr('hr_' + id, 'hasil.rekap', { idPaket: id }, (d) => { el.rekap = d; renderHasil(el); }, { fresh: paksa ? 0 : 20000, langsung: true });
+    if (!id || el.memuat) return;
+    el.memuat = true;
+    if (!el.rekap || el.rekap.meta.id !== id) { el.rekap = null; $('#h-isi', el).innerHTML = '<div class="memuat">Memuat hasil…</div>'; }
+    const res = await swr('hr_' + id, 'hasil.rekap', { idPaket: id }, (d) => { el.rekap = d; renderHasil(el); }, { fresh: paksa ? 0 : 20000, langsung: true, onError: () => { } });
+    el.memuat = false;
+    if (!el.rekap && res && !res.success) $('#h-isi', el).innerHTML = '<div class="kartu kosong"><strong>Hasil gagal dimuat</strong>' + esc(res.message) + '<br><button type="button" class="btn" data-h="ulang" style="margin-top:10px">' + ik('segar') + 'Coba lagi</button></div>';
   }
   function warnaP(p, amb) { return p >= amb ? 'h-ok' : p >= amb - 25 ? 'h-warn' : 'h-bad'; }
   function renderHasil(el) {
     const d = el.rekap, box = $('#h-isi', el);
-    if (!d) return;
     $$('[data-ht]', el).forEach((b) => b.classList.toggle('aktif', b.dataset.ht === el.tab));
+    if (el.tab === 'butir' && $('#h-paket', el).value) { box.innerHTML = '<div id="h-butir"><div class="memuat"></div></div>'; analisisButir(el, false); return; }
+    if (!d) {
+      if (!$('#h-paket', el).value) { box.innerHTML = '<div class="kartu kosong"><strong>Belum ada hasil try out</strong>Hasil muncul setelah siswa menyelesaikan paket.</div>'; return; }
+      box.innerHTML = '<div class="memuat">Memuat hasil…</div>';
+      muatHasil(el, false);
+      return;
+    }
     const kelasList = Array.from(new Set(d.rows.map((r) => r.kelas))).sort();
     const kelasSel = '<select class="inp" id="h-kelas" style="max-width:200px">' + opsi(kelasList, $('#h-kelas', el) ? $('#h-kelas', el).value : '', 'Semua kelas') + '</select>';
     const kv = $('#h-kelas', el) ? $('#h-kelas', el).value : '';
@@ -345,7 +367,6 @@
       box.innerHTML = info + '<div class="saring">' + kelasSel + '<select class="inp" id="h-pilihsiswa">' + opsi(rows.map((r) => ({ v: r.sid, l: r.nama + ' (' + r.kelas + ') — ' + fmt.angka(r.nilai) })), el.sid) + '</select><button class="btn no-print" data-h="cetak">Cetak / PDF</button><button class="btn no-print" data-h="dokumen">' + ik('dok') + 'Buat dokumen</button></div><div id="h-siswa"><div class="memuat"></div></div>';
       if (el.sid) analisisSiswa(el, el.sid);
     }
-    if (el.tab === 'butir') { box.innerHTML = '<div id="h-butir"><div class="memuat"></div></div>'; analisisButir(el, false); }
   }
   async function analisisSiswa(el, sid) {
     const r = await api('hasil.siswa', { sid });
@@ -384,11 +405,12 @@
   }
   async function aksiHasil(el, e) {
     const t = e.target.closest('[data-ht]');
-    if (t) { el.tab = t.dataset.ht; return renderHasil(el); }
+    if (t) { e.preventDefault(); el.tab = t.dataset.ht; return renderHasil(el); }
     const tr = e.target.closest('[data-hs]');
     if (tr) { el.sid = tr.dataset.hs; el.tab = 'siswa'; return renderHasil(el); }
     const b = e.target.closest('[data-h]');
     if (!b) return;
+    if (b.dataset.h === 'ulang') return muatHasil(el, true);
     if (b.dataset.h === 'cetak') window.print();
     if (b.dataset.h === 'hitung') { sibuk(b, true); await analisisButir(el, true); }
     if (b.dataset.h === 'dokumen') go('#/admin/dokumen/buat/' + el.sid);

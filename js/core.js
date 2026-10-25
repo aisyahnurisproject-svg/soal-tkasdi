@@ -4,7 +4,7 @@
    ===================================================================== */
 (function () {
   'use strict';
-  const V = '1.0.0';
+  const V = '1.1.0';
   const CFG = window.APP_CONFIG || {};
   const LS = 'bsto:v1:';
   const App = window.App = { v: V, token: null, me: null, role: null, boot: null, data: {} };
@@ -53,8 +53,8 @@
   addEventListener('offline', () => Net.gagal());
 
   // ------------------------------------------------------------ API
-  const BACA = /^(app\.info|siswa\.boot|admin\.boot|dash\.|soal\.(daftar|detail)|job\.daftar|stimulus\.daftar|paket\.(daftar|detail|otomatis|pratinjau)|monitor\.data|hasil\.(rekap|siswa|butir)|akun\.daftar|sistem\.status|migrasi\.pindai|doc\.(template|pejabat|dokumen|zip)|media\.ambil|to\.pembahasan|batch)$/;
-  const LAMA = /^(job\.(halaman|buat)|bahas\.generate|doc\.(generate|proses|zip|massal)|migrasi\.|akun\.(imporSiswa|resetSandi)|hasil\.hitungButir|soal\.status)/;
+  const BACA = /^(app\.info|siswa\.boot|admin\.boot|dash\.|soal\.(daftar|detail)|job\.daftar|stimulus\.daftar|paket\.(daftar|detail|otomatis|pratinjau)|monitor\.data|hasil\.(rekap|siswa|butir)|akun\.daftar|sistem\.status|migrasi\.pindai|doc\.(template|pejabat|dokumen|zip|unduh)|media\.ambil|to\.pembahasan|batch|paket\.nilaiPratinjau|sistem\.storage)$/;
+  const LAMA = /^(job\.(halaman|buat)|bahas\.generate|doc\.(generate|proses|zip|massal|pratinjau|unduh|revisi)|migrasi\.|akun\.(imporSiswa|resetSandi)|hasil\.hitungButir|soal\.status|sistem\.(storage|backup|bersihkan))/;
   const _inflight = {};
   let _epoch = 0;
   function konfigOk() { return CFG.GAS_URL && !/GANTI|XXXX/.test(CFG.GAS_URL); }
@@ -194,7 +194,7 @@
     let selesai;
     const hasil = new Promise((r) => { selesai = r; });
     const tutup = (v) => { lapis.remove(); document.removeEventListener('keydown', kunciEsc); selesai(v); };
-    const kunciEsc = (e) => { if (e.key === 'Escape' && o.tutup !== false) tutup(null); };
+    const kunciEsc = (e) => { const atas = $$('.lapis').pop(); if (e.key === 'Escape' && o.tutup !== false && atas === lapis) tutup(null); };
     document.addEventListener('keydown', kunciEsc);
     lapis.addEventListener('click', async (e) => {
       if (e.target === lapis && o.tutup !== false && !o.lekat) return tutup(null);
@@ -333,7 +333,13 @@
   App.perangkat = function () { let d = Store.get('perangkat', ''); if (!d) { d = rid().slice(0, 18); Store.set('perangkat', d); } return d; };
   App.info = Store.get('info', null) || { NAMA_SEKOLAH: 'Sekolah', NAMA_APP: 'Bank Soal & Try Out Online', LOGO_ID: '' };
   App.logo = (cls) => App.info.LOGO_ID ? '<img src="' + urlDrive(App.info.LOGO_ID, 200) + '" alt="Logo ' + esc(App.info.NAMA_SEKOLAH) + '" referrerpolicy="no-referrer">' : ik('sekolah');
-  App.setInfo = function (i) { if (!i) return; App.info = Object.assign({}, App.info, i); Store.set('info', App.info); document.title = App.info.NAMA_APP + ' — ' + App.info.NAMA_SEKOLAH; };
+  App.setInfo = function (i) {
+    if (!i) return;
+    App.info = Object.assign({}, App.info, i);
+    Store.set('info', App.info);
+    document.title = App.info.NAMA_APP + ' — ' + App.info.NAMA_SEKOLAH;
+    if (window.Publik && Publik.segarMerek) Publik.segarMerek();
+  };
 
   // ------------------------------------------------------------ router hash (layar disimpan, tidak dibuang)
   const Router = {

@@ -53,7 +53,7 @@
       GRUP.forEach((g) => { grup[g] = []; });
       Admin.urutan.forEach((n) => { const h = Admin.hal[n]; if (h.peran.indexOf(peran) < 0 || h.tersembunyi) return; (grup[h.grup] = grup[h.grup] || []).push(n); });
       const inisial = String((App.me && App.me.nama) || 'A').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-      el.innerHTML = '<div class="adm"><aside class="sisi" aria-label="Menu utama"><div class="merek"><div class="logo" data-logo>' + App.logo() + '</div><div><b data-nama-sekolah>' + esc(App.info.NAMA_SEKOLAH) + '</b><span>Bank soal &amp; try out</span></div></div>' +
+      el.innerHTML = '<div class="adm"><aside class="sisi" aria-label="Menu utama"><div class="merek"><div class="logo" data-logo>' + App.logo() + '</div><div><b data-nama-sekolah>' + esc(App.info.NAMA_SEKOLAH) + '</b><span data-nama-app>' + esc(App.info.NAMA_APP) + '</span></div></div>' +
         '<nav class="nav">' + Object.keys(grup).filter((g) => grup[g].length).map((g) => '<h6>' + esc(g) + '</h6>' + grup[g].map((n) => '<a href="#/admin/' + n + '" data-nav="' + n + '">' + ik(Admin.hal[n].ikon) + '<span>' + esc(Admin.hal[n].judul) + '</span><span class="nb" data-nb="' + n + '" hidden></span></a>').join('')).join('') + '</nav>' +
         '<div class="sisi-kaki"><span>v' + App.v + '</span><span class="status-net">Terhubung</span></div></aside><div class="selubung-sisi" data-tutup-sisi></div>' +
         '<div class="utama-adm"><header class="atas"><button class="btn hantu ikon tombol-menu" data-buka-sisi aria-label="Buka menu">' + ik('menu') + '</button><div class="jejak" id="jejak"></div>' +
@@ -389,8 +389,22 @@
         field('Batas pindah tab/aplikasi', '<input class="inp" type="number" min="1" max="20" data-set="PINDAH_TAB_BATAS" value="' + esc(s.PINDAH_TAB_BATAS) + '">') +
         field('Bila batas terlampaui', '<select class="inp" data-set="PINDAH_TAB_AKSI">' + opsi([{ v: 'catat', l: 'Catat & laporkan ke pengawas' }, { v: 'paksa_selesai', l: 'Kumpulkan otomatis' }], s.PINDAH_TAB_AKSI) + '</select>') +
         field('Cek tanggal lahir saat konfirmasi', '<select class="inp" data-set="CEK_TGL_LAHIR">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak' }], s.CEK_TGL_LAHIR) + '</select>') +
-        field('Tampilkan nilai ke siswa setelah selesai', '<select class="inp" data-set="TAMPIL_NILAI">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak (diumumkan guru)' }], s.TAMPIL_NILAI) + '</select>') + '</div></section></div>' +
-        '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Status sistem</h2><p>Cache server, pemicu, dan kuota.</p></div><div><button class="btn kecil" data-p="status">' + ik('segar') + 'Periksa</button> <button class="btn kecil" data-p="cache">Bangun ulang cache</button></div></div><div id="p-status" class="kecil muted">Tekan Periksa.</div></section>';
+        field('Tampilkan nilai ke siswa setelah selesai', '<select class="inp" data-set="TAMPIL_NILAI">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak (diumumkan guru)' }], s.TAMPIL_NILAI) + '</select>') +
+        field('Membuka tab baru saat ujian', '<select class="inp" data-set="LARANG_TAB_BARU">' + opsi([{ v: 'ya', l: 'Dilarang — tampilkan peringatan "akhiri ujian?"' }, { v: 'tidak', l: 'Hanya dicatat' }], s.LARANG_TAB_BARU || 'ya') + '</select>', 'Siswa yang kembali dari tab/aplikasi lain ditanya: akhiri ujian (Ya) atau lanjut mengerjakan (Tidak).') + '</div></section></div>' +
+        '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Status sistem</h2><p>Cache server, pemicu, dan kuota.</p></div><div><button class="btn kecil" data-p="status">' + ik('segar') + 'Periksa</button> <button class="btn kecil" data-p="cache">Bangun ulang cache</button></div></div><div id="p-status" class="kecil muted">Tekan Periksa.</div></section>' +
+        '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Motivasi &amp; doa siswa</h2><p>Tampil di beranda siswa dan dibaca sebelum memasukkan token ujian.</p></div></div><div class="kisi k2"><div>' +
+        field('Tampilkan ke siswa', '<select class="inp" data-set="MOTIVASI_TAMPIL">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak' }], s.MOTIVASI_TAMPIL || 'ya') + '</select>') +
+        field('Judul doa', '<input class="inp" data-set="DOA_JUDUL" value="' + esc(s.DOA_JUDUL || '') + '">') +
+        field('Isi doa', '<textarea class="inp" rows="6" dir="auto" data-set="DOA_ISI" data-mv>' + esc(s.DOA_ISI || '') + '</textarea>', 'Boleh berisi teks Arab, latin, dan artinya.') +
+        field('Pesan motivasi (satu pesan per baris)', '<textarea class="inp" rows="6" data-set="MOTIVASI_PESAN" data-mv>' + esc(s.MOTIVASI_PESAN || '') + '</textarea>', 'Siswa melihat satu pesan secara acak.') + '</div>' +
+        '<div><div class="lbl" style="margin-bottom:6px">Pratinjau tampilan siswa</div><div id="p-mv"></div></div></div></section>' +
+        '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Penyimpanan Google Drive &amp; backup</h2><p>Pemakaian ruang oleh berkas aplikasi, kapasitas spreadsheet, dan cadangan database.</p></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn kecil" data-p="storage">' + ik('segar') + 'Periksa penyimpanan</button></div></div><div id="p-storage" class="kecil muted">Tekan Periksa penyimpanan (menghitung ribuan berkas bisa memakan waktu hingga 1 menit).</div>' +
+        '<div class="kisi k2" style="margin-top:16px"><div><h3 style="margin:0 0 8px;font-size:15px">Backup database</h3><p class="kecil muted" style="margin-top:0">Salinan spreadsheet berisi data pribadi siswa dan hash kata sandi — simpan baik-baik, jangan dibagikan. Rahasia server (Script Properties) sengaja tidak ikut.</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn utama kecil" data-p="backup">' + ik('dok') + 'Backup sekarang ke Drive</button><button class="btn kecil" data-p="unduhDb">' + ik('unduh') + 'Unduh database (.xlsx)</button><button class="btn kecil" data-p="daftarBackup">Lihat daftar backup</button></div><div id="p-backup" style="margin-top:12px"></div></div>' +
+        '<div><h3 style="margin:0 0 8px;font-size:15px">Bersihkan berkas lama</h3><p class="kecil muted" style="margin-top:0">Berkas dipindahkan ke Sampah Drive dan masih bisa dipulihkan 30 hari. Gambar halaman hanya dipakai saat review; soal & stimulus tidak terpengaruh.</p>' +
+        '<div class="baris dua">' + field('Jenis berkas', '<select class="inp" id="p-bersih-f">' + opsi([{ v: 'FOLDER_HALAMAN', l: 'Gambar halaman sumber' }, { v: 'FOLDER_BACKUP', l: 'Backup database lama' }]) + '</select>') +
+        field('Lebih tua dari (hari)', '<input class="inp" type="number" min="7" id="p-bersih-h" value="90">') + '</div><div style="display:flex;gap:8px"><button class="btn kecil" data-p="bersihUji">Hitung dulu</button><button class="btn kecil bahaya" data-p="bersih">Pindahkan ke Sampah</button></div><p id="p-bersih" class="kecil"></p></div></div></section>';
       el.addEventListener('click', async (e) => {
         const b = e.target.closest('[data-p]');
         if (!b) return;
@@ -415,10 +429,51 @@
         }
         if (a === 'status') statusSistem(el);
         if (a === 'cache') { const r = await api('sistem.segarkan', {}); toast(r.message, r.success ? 'ok' : 'err'); statusSistem(el); }
+        if (a === 'storage') { sibuk(b, true); await muatStorage(el); sibuk(b, false); }
+        if (a === 'backup' || a === 'daftarBackup') { sibuk(b, true); const r = await api('sistem.backup', { aksi: a === 'backup' ? 'buat' : 'daftar' }); sibuk(b, false); if (r.message) toast(r.message, r.success ? 'ok' : 'err'); if (r.success) daftarBackup(el, r.data); }
+        if (a === 'unduhDb' || a === 'unduhBackup') { sibuk(b, true, 'Menyiapkan…'); const r = await api('sistem.backup', { aksi: 'unduh', id: b.dataset.id || '' }); sibuk(b, false); if (r.success) unduhB64(r.data.b64, r.data.nama, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); else toast(r.message, 'err'); }
+        if (a === 'hapusBackup' && await konfirmasi('Pindahkan backup ini ke Sampah Drive?', { bahaya: true, ya: 'Hapus' })) { const r = await api('sistem.backup', { aksi: 'hapus', id: b.dataset.id }); toast(r.message, r.success ? 'ok' : 'err'); if (r.success) daftarBackup(el, r.data); }
+        if (a === 'bersihUji' || a === 'bersih') {
+          const data = { folder: $('#p-bersih-f', el).value, hari: $('#p-bersih-h', el).value, uji: a === 'bersihUji' };
+          if (a === 'bersih' && !(await konfirmasi('Pindahkan berkas yang lebih tua dari ' + data.hari + ' hari ke Sampah Drive?', { bahaya: true, ya: 'Pindahkan' }))) return;
+          sibuk(b, true); const r = await api('sistem.bersihkan', data); sibuk(b, false);
+          $('#p-bersih', el).textContent = r.message;
+          if (r.success && a === 'bersih') muatStorage(el, true);
+        }
       });
     },
-    tampil(el) { $('#p-ai', el).innerHTML = Admin.b().ai.ada ? lencana('Kunci terpasang', 'ok') : lencana('Kunci belum diisi', 'warn'); }
+    tampil(el) {
+      $('#p-ai', el).innerHTML = Admin.b().ai.ada ? lencana('Kunci terpasang', 'ok') : lencana('Kunci belum diisi', 'warn');
+      const mv = () => {
+        const pesan = $('[data-set=MOTIVASI_PESAN]', el).value.split('\n').map((x) => x.trim()).filter(Boolean);
+        $('#p-mv', el).innerHTML = $('[data-set=MOTIVASI_TAMPIL]', el).value === 'tidak' ? '<p class="muted">Tidak ditampilkan ke siswa.</p>' :
+          '<div class="motivasi" style="margin-top:0"><div class="label">Penyemangat untukmu</div><p class="kutip">“' + esc(pesan[0] || '—') + '”</p></div>' +
+          '<div class="kartu" style="margin-top:12px"><b>' + esc($('[data-set=DOA_JUDUL]', el).value) + '</b><p class="doa" dir="auto">' + esc($('[data-set=DOA_ISI]', el).value) + '</p></div>';
+      };
+      if (!el.dataset.mv) { el.dataset.mv = '1'; el.addEventListener('input', (e) => { if (e.target.closest('[data-mv],[data-set=DOA_JUDUL]')) mv(); }); el.addEventListener('change', (e) => { if (e.target.matches('[data-set=MOTIVASI_TAMPIL]')) mv(); }); }
+      mv();
+    }
   });
+  const ukuran = (b) => b >= 1073741824 ? fmt.angka(b / 1073741824, 2) + ' GB' : b >= 1048576 ? fmt.angka(b / 1048576, 1) + ' MB' : fmt.angka(b / 1024, 0) + ' KB';
+  async function muatStorage(el, paksa) {
+    const box = $('#p-storage', el);
+    box.innerHTML = '<div class="memuat">Menghitung berkas di Drive…</div>';
+    const r = await api('sistem.storage', paksa ? { _fresh: true } : {});
+    if (!r.success) { box.textContent = r.message; return; }
+    const d = r.data, maks = Math.max(1, ...d.folder.map((f) => f.b));
+    box.innerHTML = (d.kuota ? '<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between" class="kecil"><b>Kuota Drive akun pemilik</b><span>' + ukuran(d.kuota.terpakai) + (d.kuota.batas ? ' dari ' + ukuran(d.kuota.batas) : '') + '</span></div>' +
+        bar(d.kuota.batas ? d.kuota.terpakai / d.kuota.batas * 100 : 0, d.kuota.batas && d.kuota.terpakai / d.kuota.batas > 0.85 ? 'bad' : 'info') + '<div class="kecil muted" style="margin-top:4px">Aplikasi ini memakai ' + ukuran(d.totalApp) + (d.kuota.terpakai ? ' (' + fmt.angka(d.totalApp / d.kuota.terpakai * 100, 1) + '% dari yang terpakai)' : '') + '.</div></div>' : '') +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Folder</th><th class="angka">Berkas</th><th class="angka">Ukuran</th><th style="width:30%"></th></tr></thead><tbody>' +
+      d.folder.map((f) => '<tr><td>' + (f.url ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.nama) + '</a>' : esc(f.nama)) + (f.sebagian ? ' ' + lencana('dihitung sebagian', 'warn') : '') + '</td><td class="angka">' + fmt.angka(f.n, 0) + '</td><td class="angka">' + ukuran(f.b) + '</td><td>' + bar(f.b / maks * 100) + '</td></tr>').join('') + '</tbody></table></div>' +
+      '<div style="margin-top:14px"><div style="display:flex;justify-content:space-between" class="kecil"><b>Kapasitas spreadsheet database</b><span>' + fmt.angka(d.totalSel, 0) + ' dari ' + fmt.angka(d.batasSel, 0) + ' sel</span></div>' + bar(d.totalSel / d.batasSel * 100, d.totalSel / d.batasSel > 0.8 ? 'bad' : 'ok') +
+      '<div class="kecil muted" style="margin-top:4px">Baris terbanyak: ' + d.sheets.slice().sort((a, b) => b.baris - a.baris).slice(0, 4).map((x) => esc(x.nama) + ' ' + fmt.angka(x.baris, 0)).join(' · ') + '. <a href="' + esc(d.spreadsheet) + '" target="_blank" rel="noopener">Buka spreadsheet</a></div></div>' +
+      '<p class="kecil muted">Dihitung ' + fmt.lalu(d.dibuat) + (d.cached ? ' (tersimpan 10 menit)' : '') + '.</p>';
+  }
+  function daftarBackup(el, d) {
+    $('#p-backup', el).innerHTML = d.backup.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Backup</th><th></th></tr></thead><tbody>' +
+      d.backup.map((x) => '<tr><td>' + esc(x.nama) + '<div class="kecil muted">' + fmt.tgl(x.tgl) + '</div></td><td style="white-space:nowrap"><a class="btn kecil" href="' + esc(x.url) + '" target="_blank" rel="noopener">Buka</a> <button class="btn kecil" data-p="unduhBackup" data-id="' + esc(x.id) + '">' + ik('unduh') + '.xlsx</button> <button class="btn kecil ikon hantu" data-p="hapusBackup" data-id="' + esc(x.id) + '" aria-label="Hapus">' + ik('hapus') + '</button></td></tr>').join('') +
+      '</tbody></table></div><p class="kecil"><a href="' + esc(d.folder) + '" target="_blank" rel="noopener">Buka folder Backup di Drive</a></p>' : '<p class="kecil muted">Belum ada backup.</p>';
+  }
   async function statusSistem(el) {
     const box = $('#p-status', el);
     box.innerHTML = '<div class="memuat">Memeriksa…</div>';

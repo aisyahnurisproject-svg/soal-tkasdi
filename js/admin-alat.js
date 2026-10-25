@@ -23,6 +23,17 @@
     }
   });
   function perluQr(t) { return t.bidang.some((b) => b.kunci === 'QR'); }
+  const FORMAT = { docs: [{ v: 'pdf', l: 'PDF' }, { v: 'docx', l: 'Word (DOCX)' }], sheets: [{ v: 'pdf', l: 'PDF' }, { v: 'xlsx', l: 'Excel (XLSX)' }], slides: [{ v: 'pdf', l: 'PDF' }, { v: 'png', l: 'Gambar (PNG)' }] };
+  function tampilPdf(b64, judul, nama, catatan) {
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([u], { type: 'application/pdf' }));
+    const m = modal({ judul, ukuran: 'xl', isi: (catatan ? '<p class="kecil muted" style="margin-top:0">' + catatan + '</p>' : '') + '<iframe class="pratinjau-pdf" title="Pratinjau dokumen" src="' + url + '#toolbar=1"></iframe>' +
+      '<p class="kecil muted">Pratinjau tidak tampil di peramban HP? Gunakan tombol unduh.</p>',
+      tombol: [{ label: ik('unduh') + 'Unduh pratinjau', aksi: () => { unduhB64(b64, nama, 'application/pdf'); return false; } }, { label: 'Tutup', kelas: 'utama' }] });
+    m.hasil.then(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
+  }
+  async function qrContoh(t) { if (!perluQr(t)) return ''; try { return await buatQr(location.origin + location.pathname + '#/verifikasi/PRATINJAU'); } catch (e) { return ''; } }
   async function buatQr(url) { const qrcode = await Lib.qr(); const q = qrcode(0, 'M'); q.addData(url); q.make(); const c = document.createElement('canvas'), n = q.getModuleCount(), s = 6, m = 4; c.width = c.height = (n + m * 2) * s; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000'; for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect((k + m) * s, (r + m) * s, s, s); return c.toDataURL('image/png').split(',')[1]; }
   async function renderDok(el) {
     $$('[data-dt]', el).forEach((b) => b.classList.toggle('aktif', b.dataset.dt === el.tab));
@@ -31,7 +42,9 @@
       box.innerHTML = '<div class="saring"><span class="kecil muted" style="flex:1">Desain template di Google Docs/Sheets/Slides, tulis placeholder seperti <span class="mono">{{NAMA}}</span>, lalu tempel tautannya di sini. Master disalin ke folder aplikasi.</span><button class="btn utama" data-d="tambahTpl">' + ik('tambah') + 'Tambah template</button></div>' +
         (T.template.length ? '<div class="kisi k2">' + T.template.map((t) => '<article class="kartu"><div class="kartu-kepala"><div><span class="chip-id">' + esc(t.id) + '</span><h3 style="margin-top:4px">' + esc(t.nama) + '</h3><p>' + esc((T.sumber[t.sumber] || {}).label || t.sumber) + ' · ' + t.engine + ' → ' + t.keluaran.toUpperCase() + ' · v' + t.versi + '</p></div>' + (t.aktif ? lencana('Aktif', 'ok') : lencana('Nonaktif', 'polos')) + '</div>' +
           '<div class="kecil" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' + t.bidang.map((b) => '<span class="lencana ' + (b.kategori === 'kustom' ? 'warn' : b.kategori === 'data' ? 'ok' : 'polos') + ' polos mono">' + esc(b.kunci) + '</span>').join('') + '</div>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn kecil" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + ik('pensil') + 'Edit master</a><button class="btn kecil" data-d="pindaiUlang" data-id="' + esc(t.id) + '">' + ik('segar') + 'Pindai ulang</button><button class="btn kecil" data-d="kolom" data-id="' + esc(t.id) + '">Atur kolom</button><button class="btn kecil ikon hantu" data-d="hapusTpl" data-id="' + esc(t.id) + '">' + ik('hapus') + '</button></div></article>').join('') + '</div>'
+          '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn kecil utama" data-d="pratinjauTpl" data-id="' + esc(t.id) + '">' + ik('mata') + 'Pratinjau</button><button class="btn kecil" data-d="editTpl" data-id="' + esc(t.id) + '">' + ik('pensil') + 'Edit</button>' +
+          '<button class="btn kecil" data-d="kolom" data-id="' + esc(t.id) + '">Atur kolom</button><button class="btn kecil" data-d="pindaiUlang" data-id="' + esc(t.id) + '">' + ik('segar') + 'Pindai ulang</button>' +
+          '<a class="btn kecil" href="' + esc(t.url) + '" target="_blank" rel="noopener">Buka master</a><button class="btn kecil ikon hantu" data-d="hapusTpl" data-id="' + esc(t.id) + '" aria-label="Hapus template">' + ik('hapus') + '</button></div></article>').join('') + '</div>'
           : '<div class="kartu kosong"><strong>Belum ada template</strong>Contoh rapor: tulis <span class="mono">{{NAMA}}</span>, <span class="mono">{{NILAI}}</span>, tabel dengan baris <span class="mono">{{#KOMPETENSI}} {{KOMPETENSI.NAMA}} {{KOMPETENSI.PERSEN}}</span>, dan <span class="mono">{{QR}}</span>.</div>') +
         '<section class="kartu" style="margin-top:16px"><h3 style="margin:0 0 10px;font-size:16px">Placeholder yang tersedia</h3>' + Object.keys(T.sumber).map((k) => '<p class="kecil"><b>' + esc(T.sumber[k].label) + ':</b> ' + T.sumber[k].kunci.map((x) => '<span class="mono">{{' + esc(x) + '}}</span>').join(' ') +
           Object.keys(T.sumber[k].blok).map((bk) => ' · baris berulang <span class="mono">{{#' + bk + '}}</span> dengan ' + T.sumber[k].blok[bk].map((x) => '<span class="mono">{{' + bk + '.' + x + '}}</span>').join(' ')).join('') + '</p>').join('') +
@@ -39,8 +52,8 @@
       return;
     }
     if (el.tab === 'buat') {
-      box.innerHTML = aktif.length ? '<section class="kartu" style="max-width:860px">' + field('Template', '<select class="inp" id="db-tpl">' + opsi(aktif.map((t) => ({ v: t.id, l: t.nama + ' (' + t.keluaran.toUpperCase() + ')' })), el.tplPilih) + '</select>') + '<div id="db-form"></div>' +
-        '<div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn utama" data-d="generate">' + ik('dok') + 'Terbitkan & unduh</button></div></section>'
+      box.innerHTML = aktif.length ? '<section class="kartu" style="max-width:860px">' + field('Template', '<select class="inp" id="db-tpl">' + opsi(aktif.map((t) => ({ v: t.id, l: t.nama + ' (' + t.keluaran.toUpperCase() + ')' })), el.tplPilih) + '</select>') + '<div id="db-form"></div><div id="db-format"></div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" data-d="pratinjau">' + ik('mata') + 'Pratinjau</button><button class="btn utama" data-d="generate">' + ik('dok') + 'Terbitkan & unduh</button></div></section>'
         : '<div class="kartu kosong"><strong>Belum ada template aktif</strong>Tambahkan di tab Template.</div>';
       if (aktif.length) { $('#db-tpl', box).onchange = () => { el.tplPilih = $('#db-tpl', box).value; formSumber(el); }; formSumber(el); }
       return;
@@ -56,11 +69,29 @@
     if (el.tab === 'riwayat') {
       box.innerHTML = '<div class="memuat"></div>';
       const r = await api('doc.dokumen', {});
-      box.innerHTML = r.success && r.data.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nomor</th><th>Dokumen</th><th>Atas nama</th><th>Terbit</th><th>Status</th><th></th></tr></thead><tbody>' +
-        r.data.map((x) => '<tr><td class="chip-id">' + esc(x.id) + '</td><td>' + esc(x.judul) + '<div class="kecil muted">' + esc(x.nama) + '</div></td><td>' + esc(x.subjek) + '</td><td class="kecil">' + fmt.tgl(x.terbit) + '<div class="muted">' + esc(x.oleh) + '</div></td>' +
-          '<td>' + (x.status === 'TERBIT' ? lencana('Sah', 'ok') : lencana('Ditarik', 'bad')) + '</td><td style="white-space:nowrap"><a class="btn kecil" href="#/verifikasi/' + esc(x.kode) + '" target="_blank" rel="noopener">Verifikasi</a> ' +
-          (x.url ? '<a class="btn kecil" href="' + esc(x.url) + '" target="_blank" rel="noopener">Drive</a> ' : '') + (x.status === 'TERBIT' ? '<button class="btn kecil bahaya" data-d="tarik" data-id="' + esc(x.id) + '">Tarik</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>'
-        : '<div class="kartu kosong"><strong>Belum ada dokumen terbit</strong></div>';
+      el.dok = r.success ? r.data : [];
+      box.innerHTML = '<div class="saring"><input class="inp cari" id="dr-cari" placeholder="Cari nama, nomor, atau jenis dokumen…"><select class="inp" id="dr-status">' +
+        opsi([{ v: 'TERBIT', l: 'Sah' }, { v: 'DIGANTI', l: 'Diganti (revisi)' }, { v: 'DITARIK', l: 'Ditarik' }], '', 'Semua status') + '</select><button class="btn utama" data-d="baru">' + ik('tambah') + 'Dokumen baru</button></div><div id="dr-isi"></div>';
+      const engineDok = (x) => x.engine || ((T.template.find((t) => t.id === x.templateId) || {}).engine) || 'docs';
+      const isiR = () => {
+        const q = $('#dr-cari', box).value.toLowerCase(), st = $('#dr-status', box).value;
+        const list = el.dok.filter((x) => (!st || x.status === st) && (!q || (x.id + ' ' + x.judul + ' ' + x.subjek).toLowerCase().indexOf(q) >= 0));
+        $('#dr-isi', box).innerHTML = list.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nomor</th><th>Dokumen</th><th>Atas nama</th><th>Terbit</th><th>Status</th><th>Aksi</th></tr></thead><tbody>' +
+          list.map((x) => {
+            const fmts = x.gdoc ? (FORMAT[engineDok(x)] || FORMAT.docs).map((f) => f.v) : [x.format || 'pdf'];
+            const st = { TERBIT: lencana('Sah', 'ok'), DIGANTI: lencana('Diganti', 'warn'), DITARIK: lencana('Ditarik', 'bad') }[x.status] || lencana(x.status, 'polos');
+            return '<tr><td class="chip-id">' + esc(x.id) + '</td><td>' + esc(x.judul) + (x.catatan ? '<div class="kecil muted">' + esc(x.catatan) + '</div>' : '') + '</td><td>' + esc(x.subjek) + '</td><td class="kecil">' + fmt.tgl(x.terbit) + '<div class="muted">' + esc(x.oleh) + '</div></td>' +
+              '<td>' + st + '</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">' + fmts.map((f) => '<button class="btn kecil" data-d="unduh" data-id="' + esc(x.id) + '" data-fmt="' + f + '">' + ik('unduh') + f.toUpperCase() + '</button>').join('') +
+              (x.status === 'TERBIT' ? '<button class="btn kecil" data-d="revisi" data-id="' + esc(x.id) + '">' + ik('pensil') + 'Edit</button>' : '') +
+              '<a class="btn kecil" href="#/verifikasi/' + esc(x.kode) + '" target="_blank" rel="noopener">Verifikasi</a>' +
+              (x.status === 'TERBIT' ? '<button class="btn kecil" data-d="tarik" data-id="' + esc(x.id) + '">Tarik</button>' : '') +
+              '<button class="btn kecil ikon hantu" data-d="hapusDok" data-id="' + esc(x.id) + '" aria-label="Hapus dokumen">' + ik('hapus') + '</button></div></td></tr>';
+          }).join('') + '</tbody></table></div>'
+          : '<div class="kartu kosong"><strong>' + (el.dok.length ? 'Tidak ada dokumen yang cocok' : 'Belum ada dokumen terbit') + '</strong>Tekan "Dokumen baru" untuk membuat dari template.</div>';
+      };
+      $('#dr-cari', box).addEventListener('input', debounce(isiR, 200));
+      $('#dr-status', box).onchange = isiR;
+      isiR();
       return;
     }
     if (el.tab === 'pejabat') {
@@ -83,6 +114,7 @@
     html += kustom.map((b) => field(b.label + (b.wajib ? ' *' : ''), b.tipe === 'area' ? '<textarea class="inp" data-kustom="' + esc(b.kunci) + '"></textarea>' : '<input class="inp" type="' + ({ tanggal: 'date', angka: 'number' }[b.tipe] || 'text') + '" data-kustom="' + esc(b.kunci) + '">', esc(b.bantu || ''))).join('');
     if (t.bidang.some((b) => b.kategori === 'pejabat')) { const pj = await api('doc.pejabat', {}); html += field('Penanda tangan', '<select class="inp" id="db-pj">' + opsi((pj.data || []).filter((p) => p.aktif).map((p) => ({ v: p.id, l: p.nama + ' — ' + p.jabatan }))) + '</select>'); }
     box.innerHTML = html || '<p class="kecil muted">Template ini tidak membutuhkan isian.</p>';
+    $('#db-format', el).innerHTML = field('Format unduhan', '<select class="inp" id="db-fmt" style="max-width:260px">' + opsi(FORMAT[t.engine] || FORMAT.docs, t.keluaran) + '</select>', 'Format lain tetap bisa diunduh nanti dari tab Riwayat.');
     const ps = $('#db-paket', box), ss = $('#db-sid', box);
     if (ps && ss) {
       const isiS = async () => { const r = await api('hasil.rekap', { idPaket: ps.value }); ss.innerHTML = r.success ? opsi(r.data.rows.map((x) => ({ v: x.sid, l: x.nama + ' (' + x.kelas + ') — ' + fmt.angka(x.nilai) })), el.refSid) : ''; };
@@ -123,20 +155,79 @@
         } }] });
     }
     if (a === 'hapusTpl' && await konfirmasi('Hapus template dari daftar? Berkas master tetap di Drive.', { bahaya: true, ya: 'Hapus' })) { const r = await api('doc.hapusTemplate', { id: b.dataset.id }); toast(r.message, r.success ? 'ok' : 'err'); muatUlang(); }
-    if (a === 'generate') {
+    if (a === 'generate' || a === 'pratinjau') {
       const tp = T.template.find((x) => x.id === $('#db-tpl', el).value), ref = {};
       if ($('#db-sid', el)) ref.sid = $('#db-sid', el).value;
       if ($('#db-kelas', el)) { ref.idPaket = $('#db-paket', el).value; ref.kelas = $('#db-kelas', el).value; }
       if ($('#db-nis', el)) { ref.nis = $('#db-nis', el).value.trim(); ref.idPaket = $('#db-pk2', el).value; }
       const isian = {};
       $$('[data-kustom]', el).forEach((x) => { isian[x.dataset.kustom] = x.value; });
+      const pejabatId = $('#db-pj', el) ? $('#db-pj', el).value : '', format = $('#db-fmt', el) ? $('#db-fmt', el).value : '';
+      if (a === 'pratinjau') {
+        sibuk(b, true, 'Menyusun…');
+        const r = await api('doc.pratinjau', { templateId: tp.id, ref, isian, qr: await qrContoh(tp), pejabatId });
+        sibuk(b, false);
+        if (!r.success) return toast(r.message, 'err', 8000);
+        return tampilPdf(r.data.b64, 'Pratinjau — ' + tp.nama, r.data.nama, 'Belum diterbitkan: tidak bernomor, QR berisi contoh, dan tidak tercatat di riwayat.');
+      }
       sibuk(b, true, 'Menerbitkan…');
       let kode = '', qr = '';
       if (perluQr(tp)) { const s = await api('doc.siapkan', {}); if (s.success) { kode = s.data.kode; try { qr = await buatQr(s.data.url); } catch (er) { toast('QR gagal dibuat di peramban: ' + er.message, 'warn'); } } }
-      const r = await api('doc.generate', { templateId: tp.id, ref, isian, kode, qr, pejabatId: $('#db-pj', el) ? $('#db-pj', el).value : '' });
+      const r = await api('doc.generate', { templateId: tp.id, ref, isian, kode, qr, pejabatId, format });
       sibuk(b, false);
       toast(r.message, r.success ? 'ok' : 'err', 8000);
       if (r.success && r.data.b64) unduhB64(r.data.b64, r.data.nama, r.data.mime);
+    }
+    if (a === 'baru') { el.tab = 'buat'; return renderDok(el); }
+    if (a === 'pratinjauTpl') {
+      const tp = T.template.find((x) => x.id === b.dataset.id);
+      sibuk(b, true);
+      const r = await api('doc.pratinjau', { templateId: tp.id, qr: await qrContoh(tp) });
+      sibuk(b, false);
+      if (!r.success) return toast(r.message, 'err', 8000);
+      tampilPdf(r.data.b64, 'Pratinjau template — ' + tp.nama, r.data.nama, 'Diisi data contoh. Isian manual ditampilkan sebagai ‹label›.');
+    }
+    if (a === 'editTpl') {
+      const tp = T.template.find((x) => x.id === b.dataset.id);
+      modal({ judul: 'Edit template', isi: field('Nama template', '<input class="inp" id="et-nama" value="' + esc(tp.nama) + '">') +
+        '<div class="baris dua">' + field('Sumber data', '<select class="inp" id="et-sumber">' + opsi(Object.keys(T.sumber).map((k) => ({ v: k, l: T.sumber[k].label })), tp.sumber) + '</select>') +
+        field('Format bawaan', '<select class="inp" id="et-out">' + opsi(FORMAT[tp.engine] || FORMAT.docs, tp.keluaran) + '</select>') + '</div>' +
+        '<label class="cek"><input type="checkbox" id="et-aktif"' + (tp.aktif ? ' checked' : '') + '>Template aktif (bisa dipakai membuat dokumen)</label>' +
+        '<p class="kecil muted">Mengubah isi/tata letak dilakukan di master Google (tombol "Buka master"), lalu tekan "Pindai ulang".</p>',
+        tombol: [{ label: 'Batal' }, { label: 'Simpan', kelas: 'utama', aksi: async (m) => {
+          const r = await api('doc.simpanTemplate', { id: tp.id, nama: $('#et-nama', m).value, sumber: $('#et-sumber', m).value, keluaran: $('#et-out', m).value, aktif: $('#et-aktif', m).checked });
+          toast(r.message, r.success ? 'ok' : 'err'); if (r.success) await muatUlang(); return r.success ? true : false;
+        } }] });
+    }
+    if (a === 'unduh') {
+      sibuk(b, true);
+      const r = await api('doc.unduh', { id: b.dataset.id, format: b.dataset.fmt });
+      sibuk(b, false);
+      if (r.success) unduhB64(r.data.b64, r.data.nama, r.data.mime); else toast(r.message, 'err', 8000);
+    }
+    if (a === 'hapusDok' && await konfirmasi('Hapus dokumen ' + b.dataset.id + '? Berkasnya dipindah ke Sampah Drive dan kode QR-nya tidak berlaku lagi.', { bahaya: true, ya: 'Hapus' })) {
+      const r = await api('doc.hapus', { id: b.dataset.id }); toast(r.message, r.success ? 'ok' : 'err'); if (r.success) renderDok(el);
+    }
+    if (a === 'revisi') {
+      const x = el.dok.find((d) => d.id === b.dataset.id), tp = T.template.find((t) => t.id === x.templateId);
+      if (!tp) return toast('Template dokumen ini sudah dihapus, jadi tidak bisa diedit.', 'err');
+      const kustom = tp.bidang.filter((f) => f.kategori === 'kustom');
+      const pj = tp.bidang.some((f) => f.kategori === 'pejabat') ? await api('doc.pejabat', {}) : null;
+      modal({ judul: 'Edit dokumen ' + x.id, ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">' + esc(x.judul) + ' — ' + esc(x.subjek) + '. Dokumen akan diterbitkan ulang dengan nomor & QR baru; dokumen lama berstatus <b>diganti</b>. Data hasil TO diambil ulang dari sistem.</p>' +
+        (kustom.length ? kustom.map((f) => field(f.label, f.tipe === 'area' ? '<textarea class="inp" data-rv="' + esc(f.kunci) + '">' + esc(x.isian[f.kunci] || x.isian[f.kunci.toLowerCase()] || '') + '</textarea>' : '<input class="inp" data-rv="' + esc(f.kunci) + '" value="' + esc(x.isian[f.kunci] || x.isian[f.kunci.toLowerCase()] || '') + '">')).join('') : '<p class="kecil">Template ini tidak memiliki isian manual; data akan diperbarui dari sistem.</p>') +
+        '<div class="baris dua">' + (pj && pj.success ? field('Penanda tangan', '<select class="inp" id="rv-pj">' + opsi(pj.data.filter((p) => p.aktif).map((p) => ({ v: p.id, l: p.nama + ' — ' + p.jabatan }))) + '</select>') : '') +
+        field('Format unduhan', '<select class="inp" id="rv-fmt">' + opsi(FORMAT[tp.engine] || FORMAT.docs, x.format) + '</select>') + '</div>' + field('Alasan perubahan (opsional)', '<input class="inp" id="rv-alasan">'),
+        tombol: [{ label: 'Batal' }, { label: 'Terbitkan revisi', kelas: 'utama', aksi: async (m) => {
+          const isian = {};
+          $$('[data-rv]', m).forEach((i) => { isian[i.dataset.rv] = i.value; });
+          let kode = '', qr = '';
+          if (perluQr(tp)) { const s = await api('doc.siapkan', {}); if (s.success) { kode = s.data.kode; try { qr = await buatQr(s.data.url); } catch (er) { } } }
+          const r = await api('doc.revisi', { id: x.id, isian, kode, qr, pejabatId: $('#rv-pj', m) ? $('#rv-pj', m).value : '', format: $('#rv-fmt', m).value, alasan: $('#rv-alasan', m).value });
+          toast(r.message, r.success ? 'ok' : 'err', 8000);
+          if (!r.success) return false;
+          if (r.data.b64) unduhB64(r.data.b64, r.data.nama, r.data.mime);
+          renderDok(el);
+        } }] });
     }
     if (a === 'massal') {
       const prog = $('#dm-prog', el);
