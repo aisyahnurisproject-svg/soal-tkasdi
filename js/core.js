@@ -4,7 +4,7 @@
    ===================================================================== */
 (function () {
   'use strict';
-  const V = '1.1.0';
+  const V = '1.2.0';
   const CFG = window.APP_CONFIG || {};
   const LS = 'bsto:v1:';
   const App = window.App = { v: V, token: null, me: null, role: null, boot: null, data: {} };
@@ -53,8 +53,8 @@
   addEventListener('offline', () => Net.gagal());
 
   // ------------------------------------------------------------ API
-  const BACA = /^(app\.info|siswa\.boot|admin\.boot|dash\.|soal\.(daftar|detail)|job\.daftar|stimulus\.daftar|paket\.(daftar|detail|otomatis|pratinjau)|monitor\.data|hasil\.(rekap|siswa|butir)|akun\.daftar|sistem\.status|migrasi\.pindai|doc\.(template|pejabat|dokumen|zip|unduh)|media\.ambil|to\.pembahasan|batch|paket\.nilaiPratinjau|sistem\.storage)$/;
-  const LAMA = /^(job\.(halaman|buat)|bahas\.generate|doc\.(generate|proses|zip|massal|pratinjau|unduh|revisi)|migrasi\.|akun\.(imporSiswa|resetSandi)|hasil\.hitungButir|soal\.status|sistem\.(storage|backup|bersihkan))/;
+  const BACA = /^(app\.info|siswa\.boot|admin\.boot|dash\.|soal\.(daftar|detail)|job\.daftar|stimulus\.daftar|paket\.(daftar|detail|otomatis|pratinjau)|monitor\.data|hasil\.(rekap|siswa|butir|survei)|akun\.daftar|sistem\.status|migrasi\.pindai|doc\.(template|pejabat|dokumen|zip|unduh)|media\.ambil|to\.pembahasan|batch|paket\.nilaiPratinjau|sistem\.storage)$/;
+  const LAMA = /^(job\.(halaman|buat)|bahas\.generate|doc\.(generate|proses|zip|massal|pratinjau|unduh|revisi)|migrasi\.|akun\.(imporSiswa|resetSandi)|hasil\.hitungButir|paket\.unduhSoal|soal\.status|sistem\.(storage|backup|bersihkan))/;
   const _inflight = {};
   let _epoch = 0;
   function konfigOk() { return CFG.GAS_URL && !/GANTI|XXXX/.test(CFG.GAS_URL); }

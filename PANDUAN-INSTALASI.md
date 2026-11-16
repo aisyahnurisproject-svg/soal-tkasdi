@@ -11,6 +11,94 @@ Frontend memanggil backend lewat `fetch` ke URL `/exec`. Semua data tersimpan di
 
 ---
 
+## Pembaruan v1.2 — apa yang berubah
+
+| No | Perubahan | Tempat |
+| --- | --- | --- |
+| 1 | **Satu paket TO berisi 3 subtes**: *Latihan* → *TO Utama* → *Survei Lingkungan Belajar*. Durasinya diatur per paket (contoh 5 / 75 / 25 menit). Siswa cukup login dan memasukkan token **sekali**. Setelah menekan **Selesai subtes**, layar otomatis pindah ke halaman transisi subtes berikutnya tanpa keluar atau login ulang. | Paket TO → Buat/Ubah paket, lembar ujian |
+| 2 | **Waktu tunggu transisi** sebelum TO utama dan sebelum survei (0–900 detik) bisa diatur per paket. Bawaannya diatur di Pengaturan. Setelah hitungan selesai, subtes berikutnya **dimulai otomatis**, atau siswa menekan **Mulai** (mode manual). | Paket TO, Pengaturan |
+| 3 | **Animasi waktu tunggu** bisa dipilih: panduan tarik napas, cincin hitung mundur, tips mengerjakan bergantian, atau sederhana. Pesan sebelum subtes utama/survei dan daftar tips bisa diubah. Ada tombol **Coba tampilan transisi** untuk melihat hasilnya. | Pengaturan → Subtes, transisi & tampilan akhir |
+| 4 | Bila waktu subtes habis sebelum siswa menekan Selesai, jawaban disimpan dan siswa **otomatis berlanjut** ke subtes berikutnya. Waktu dihitung server, jadi ini tetap berlaku saat HP siswa sempat offline. | Lembar ujian |
+| 5 | **Nilai hanya dari subtes TO Utama.** Latihan dan survei tidak dinilai. Setelah semua subtes selesai, siswa melihat nilai, **Kelebihanmu** dan **Yang perlu ditingkatkan** (per sub kompetensi), serta **tabel pembanding** dengan TO yang pernah diikuti. Tabel pembanding berisi nilai, perubahan ▲▼, dan perubahan per kompetensi. Tabel tampil otomatis. | Halaman hasil siswa, pratinjau admin |
+| 6 | Tampilan akhir bisa diatur: animasi (perayaan konfeti, nilai naik, tanpa), tampil/sembunyi tabel pembanding, dan pesan di halaman hasil. | Pengaturan |
+| 7 | **Kategori soal terpisah**: *TO Utama*, *Latihan*, *Survei*. Bank Soal punya tab per kategori, dan soal latihan/survei diberi tanda **LATIHAN** / **SURVEI** di Bank Soal, Antrean Review, Paket TO, dan Hasil. Survei bisa memakai bentuk baru **Skala sikap** (Sangat setuju … Sangat tidak setuju, atau Selalu … Tidak pernah) tanpa kunci jawaban. Saat unggah berkas, pilih kategori agar AI membacanya sebagai angket. | Bank Soal, Unggah & Ekstraksi |
+| 8 | Susunan paket dikelompokkan per subtes. Tombol *Tambah soal* di tiap kelompok hanya menampilkan soal berkategori sama, sehingga soal latihan/survei tidak bercampur dengan soal TO. | Paket TO → detail |
+| 9 | **Hapus paket TO** dari daftar maupun halaman detail. Paket yang sudah dikerjakan siswa meminta Anda **mengetik kode paket**, lalu ikut menghapus sesi, jawaban, nilai, dan analisis butirnya. Paket yang masih dikerjakan siswa tidak bisa dihapus. Soal di bank soal tetap aman. | Paket TO (Super Admin) |
+| 10 | **Unduh soal** paket ke **PDF** atau **Word (.docx)** untuk arsip pribadi. Bisa disertai kunci jawaban dan/atau pembahasan, dan bisa memilih subtes. Rumus diubah ke teks yang terbaca (¾ → 3/4, x², √2, 90°), gambar soal disisipkan, dan nomor dimulai lagi dari 1 tiap subtes. | Paket TO |
+| 11 | Tab baru **Survei & latihan** di Hasil & Analisis: sebaran jawaban tiap pernyataan survei (bisa disaring per kelas, unduh Excel) dan proporsi benar soal latihan. Monitoring menampilkan subtes yang sedang dikerjakan siswa ("Subtes 2/3 · TO Utama", "Jeda menuju …"). *Tambah waktu* berlaku untuk subtes yang sedang berjalan. | Hasil & Analisis, Monitoring |
+
+### Cara memperbarui dari v1.1
+
+**Backend** — ganti isi **5 berkas** di editor Apps Script: `Kode.gs`, `Akun.gs`, `BankSoal.gs`, `TryOut.gs`, `Analisis.gs`. Berkas `Setup.gs`, `Migrasi.gs`, `DocEngine.gs`, dan `appsscript.json` tidak berubah. Simpan, lalu **Terapkan → Kelola deployment → ✏️ Edit → Versi baru → Terapkan**. URL `/exec` tetap sama.
+
+- **Tidak perlu** menjalankan `setupAppEnvironment()` lagi. Kolom baru (`kategori`, `bagian`, `subtes_json`, `fase_json`) ditambahkan otomatis di kanan sheet saat pertama dipakai, dan data lama tidak disentuh.
+- Semua soal lama otomatis berkategori **TO Utama**. Paket lama berjalan seperti biasa sebagai satu subtes. Sesi siswa yang sedang berjalan saat Anda memperbarui tetap bisa dilanjutkan.
+- *Unduh soal* memakai layanan lanjutan **Drive API**. Layanan ini sudah aktif bila Anda memakai `appsscript.json` dari paket ini (fitur konversi Word juga memakainya).
+
+**Frontend** — ekstrak ZIP baru ke folder repository yang sama (timpa berkas lama, **jangan** timpa `js/config.js` Anda), lalu:
+
+```bash
+git add .
+git commit -m "Pembaruan v1.2"
+git push
+```
+
+Tekan **Ctrl+Shift+R**. Versi berkas sudah dinaikkan (`?v=1.2.0`).
+
+### Cara memakai 3 subtes
+
+1. **Bank Soal**: buat atau unggah soal latihan dan survei dengan memilih *Kategori soal*. Untuk survei, pakai bentuk *Skala sikap*.
+2. **Paket TO → Buat paket**: centang subtes yang dipakai, isi durasi dan jeda. Subtes tanpa soal otomatis dilewati.
+3. Di detail paket, isi tiap kelompok lewat **Tambah soal Latihan / TO Utama / Survei**, lalu **Simpan susunan**.
+4. Coba dengan **Pratinjau tampilan siswa**. Di pratinjau ada tombol *Lewati jeda*.
+
+### Catatan jujur tentang v1.2
+
+- Gambar di berkas unduhan disisipkan lewat Google Docs. Penyisipan gambar ini hanya bisa diuji di akun Google sungguhan, jadi coba sekali dengan paket bergambar sebelum dipakai rutin. Bila sebuah gambar gagal dimuat, gambar itu dilewati dan dokumen tetap jadi.
+- Rumus di berkas unduhan berupa teks biasa (3/4, x², √2). Rumus yang sangat kompleks (matriks, susunan bertingkat) menjadi satu baris teks.
+- Waktu tunggu dan durasi tiap subtes dihitung server. Di mode **manual**, waktu subtes baru mulai berjalan saat tombol *Mulai* ditekan, dengan batas keterlambatan 10 menit.
+- Jawaban latihan dan survei disimpan di sheet `Jawaban`. Kolom `benar` berisi `latihan:benar/salah` atau `survei`, dan kolom `skor` dibiarkan kosong. Jawaban ini tidak masuk HasilTO, analisis butir, maupun nilai.
+- Menghapus paket **tidak bisa dibatalkan**. Unduh rekap atau buat *Backup* (Pengaturan) lebih dulu bila datanya masih diperlukan.
+
+---
+
+## Pembaruan v1.1 — apa yang berubah
+
+| No | Perubahan | Tempat |
+| --- | --- | --- |
+| 1 | Area **Unggah berkas** kini tampil utuh (sebelumnya terpotong). | Unggah & Ekstraksi |
+| 2 | Tab **Rekap / Per siswa / Per kelas / Butir soal** selalu bisa diklik. Bila data gagal dimuat, muncul tombol **Coba lagi**. | Hasil & Analisis |
+| 3 | Centang soal di **Tambah dari bank** tidak hilang lagi. Tersedia penghitung "N soal dipilih", centang semua, dan klik baris untuk memilih. | Paket TO |
+| 4 | **Dokumen**: *Pratinjau* template (data contoh) dan pratinjau sebelum terbit; *Edit* template; Riwayat dengan pencarian, **unduh PDF/DOCX** (Sheets: PDF/XLSX, Slides: PDF/PNG), **Edit** (terbit ulang dengan isian baru; dokumen lama berstatus *diganti*), Tarik, dan **Hapus**. | Dokumen |
+| 5 | **Nama aplikasi** dari Pengaturan langsung tampil di sidebar, halaman masuk, header siswa, lembar ujian, dan judul tab peramban. | Seluruh tampilan |
+| 6 | Setelah mengumpulkan, siswa langsung melihat nilai, **Fokus belajarmu**, dan tombol **Lihat yang perlu dipelajari** (per kompetensi → sub kompetensi, berapa soal belum tepat). Pratinjau admin kini berakhir dengan tombol **Selesai & lihat hasil** yang menampilkan tampilan yang sama. | Area siswa, Paket TO |
+| 7 | Tombol **Perbesar** pada gambar & tabel stimulus/soal (zoom −/+, ukuran awal). Penanda waktu yang tenang: sisa **30 menit**, **15 menit**, dan **3 menit** (menyebut berapa soal masih kosong, atau "semua sudah terisi ✓"). Tanpa suara, tanpa jendela yang menghalangi. | Lembar ujian |
+| 8 | **Penyimpanan Google Drive** (per folder, kuota akun, kapasitas spreadsheet), **Backup** ke Drive kapan saja, unduh database (.xlsx), dan **bersihkan** berkas lama ke Sampah. | Pengaturan |
+| 9 | Aturan **tidak boleh membuka tab baru**: saat siswa kembali dari tab/aplikasi lain muncul pertanyaan *Akhiri ujian? Ya / Tidak*; *Tidak* = lanjut mengerjakan. Membuka aplikasi di tab kedua pada peramban yang sama langsung diblokir. Bisa dimatikan di Pengaturan → Aturan ujian. | Lembar ujian, Pengaturan |
+| 10 | **Motivasi & doa**: diatur Super Admin (Pengaturan → Motivasi & doa siswa, ada pratinjau). Tampil di beranda siswa, dan dibaca dulu sebelum kolom token muncul. | Area siswa, Pengaturan |
+
+### Cara memperbarui dari v1.0
+
+**Backend** — ganti isi 4 berkas di editor Apps Script: `Kode.gs`, `Akun.gs`, `TryOut.gs`, `DocEngine.gs` (berkas lain tidak berubah). Simpan, lalu **Terapkan → Kelola deployment → ✏️ Edit → Versi baru → Terapkan**. URL `/exec` tetap sama. Tidak perlu menjalankan setup ulang; pengaturan baru memakai nilai bawaan dan folder `Backup` dibuat otomatis saat backup pertama.
+
+**Frontend** — ekstrak ZIP baru ke folder repository yang sama (timpa berkas lama, **jangan** timpa `js/config.js` Anda), lalu:
+
+```bash
+git add .
+git commit -m "Pembaruan v1.1"
+git push
+```
+
+Tekan **Ctrl+Shift+R** di peramban. Versi berkas sudah dinaikkan (`?v=1.1.0`) sehingga peramban siswa memuat yang baru.
+
+### Catatan jujur tentang v1.1
+
+- Peramban tidak mengizinkan situs web **mencegah** Ctrl+T atau berpindah aplikasi. Yang bisa dilakukan aplikasi: mencatatnya, menanyakan "akhiri ujian?" saat siswa kembali, dan memblokir tab kedua aplikasi ini.
+- Ekspor PDF/DOCX dari riwayat memakai salinan Google Docs yang kini disimpan di folder `Ekspor`. Dokumen yang terbit sebelum v1.1 hanya bisa diunduh dalam format aslinya.
+- Pratinjau PDF tampil langsung di peramban komputer. Di sebagian peramban HP, gunakan tombol **Unduh pratinjau**.
+
+---
+
 ## 1. Pasang backend (Google Apps Script)
 
 ### 1a. Buat proyek dan tempel kode
@@ -229,7 +317,10 @@ Cakupan versi ini: satu penanda tangan per dokumen, verifikasi di situs sekolah 
 
 ## 11. Ringkasan pengujian sebelum diserahkan
 
-- **Simulator GAS di Node** (Sheets dengan konversi angka, Cache 100 KB, Properties, Lock non-reentrant, Drive, UrlFetch tiruan): **124/124 uji lulus**. Uji ini mencakup:
+- **v1.2**: **184 uji backend lulus**. Uji ini mencakup kategori soal dan skala sikap; ekstraksi berkategori survei; paket 3 subtes; jeda dan penolakan mulai sebelum jeda habis; klik ganda; lanjut otomatis saat waktu habis; mode manual; tambah waktu per subtes; nilai hanya TO utama; finalisasi jawaban latihan/survei; penutupan sesi kedaluwarsa; rekap survei per kelas; analisis butir hanya soal utama; kompatibilitas sesi lama; unduh PDF/DOCX dengan dan tanpa kunci/pembahasan; konversi rumus; akses per mapel; serta hapus paket dengan konfirmasi.
+- **Uji pembaruan v1.1 → v1.2** (database dibuat dengan kode v1.1, lalu kode diganti tanpa setup ulang): **15/15 lulus**. Sesi yang sedang berjalan tetap bisa dilanjutkan dan dinilai, kolom baru bertambah sendiri, dan NIS berawalan 0 tetap utuh.
+- **Browser (Chromium) v1.2**: **73/73 lulus**. Alur siswa latihan → transisi → TO utama → transisi → survei → hasil dan tabel pembanding; muat ulang/tombol kembali tidak mengulang ujian; tampilan 360 px tanpa gulir samping; bank soal per kategori; form dan susunan paket per subtes; pratinjau berfase; unduh PDF/DOCX; monitoring subtes; hasil survei; pengaturan dan demo transisi; hapus paket dengan ketik kode. Hasilnya 0 error JavaScript.
+- **Simulator GAS di Node** (Sheets dengan konversi angka, Cache 100 KB, Properties, Lock non-reentrant, Drive, UrlFetch tiruan): **160/160 uji lulus** (v1.1 menambah 36 uji: peta belajar, nilai pratinjau, motivasi, penyimpanan, backup, unduh multi-format, hapus, dan status *diganti* dokumen). Uji ini mencakup:
   - setup idempoten;
   - login 3 peran dan penguncian;
   - allowlist rahasia;

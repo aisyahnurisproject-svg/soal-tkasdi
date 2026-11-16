@@ -32,6 +32,10 @@
     aktif: ['Aktif', 'ok'], ditutup: ['Ditutup', 'polos'], proses: ['Diproses', 'info'], selesai: ['Selesai', 'ok'], sebagian: ['Sebagian gagal', 'warn'],
     menunggu: ['Menunggu', 'warn'], ditolak: ['Ditolak', 'bad'], nonaktif: ['Nonaktif', 'bad'] };
   Admin.status = (s) => { const x = STATUS[s] || [s || '—', 'polos']; return lencana(x[0], x[1]); };
+  /** Label subtes dari Pengaturan + tanda khusus soal latihan & survei (soal TO utama tanpa tanda). */
+  Admin.labelKat = (k) => { const s = Admin.b().set || {}; return ({ latihan: s.LABEL_LATIHAN || 'Latihan', utama: s.LABEL_UTAMA || 'TO Utama', survei: s.LABEL_SURVEI || 'Survei Lingkungan Belajar' })[k || 'utama'] || k; };
+  Admin.kat = (k) => k === 'latihan' ? '<span class="lencana kat-latihan" title="Soal latihan — terpisah dari soal TO utama">LATIHAN</span>'
+    : k === 'survei' ? '<span class="lencana kat-survei" title="Soal survei lingkungan belajar — tidak dinilai">SURVEI</span>' : '';
   Admin.bentuk = (b) => '<span class="lencana navy polos">' + esc((BENTUK_LABEL[b] || b || '').replace('Pilihan ganda kompleks', 'PGK').replace('Pilihan ganda', 'PG')) + '</span>';
   Admin.salin = (t) => { navigator.clipboard && navigator.clipboard.writeText(t).then(() => toast('Disalin.', 'ok')); };
   Admin.sandiSekali = function (judul, list) {
@@ -154,7 +158,8 @@
     const maks = Math.max(1, ...Object.values(d.perMapel || {}).map((m) => m.total));
     const perKomp = Object.keys(d.perKomp || {}).map((k) => ({ k, n: d.perKomp[k] })).sort((a, b) => b.n - a.n).slice(0, 8);
     $('#dash-isi', el).innerHTML =
-      '<div class="kisi k4"><div class="kartu stat"><div class="lab">Total butir soal</div><div class="ang">' + fmt.angka(d.total, 0) + '<small>' + fmt.angka(ps.disetujui || 0, 0) + ' disetujui</small></div>' + bar(d.total ? (ps.disetujui || 0) / d.total * 100 : 0, 'ok') + '</div>' +
+      '<div class="kisi k4"><div class="kartu stat"><div class="lab">Total butir soal</div><div class="ang">' + fmt.angka(d.total, 0) + '<small>' + fmt.angka(ps.disetujui || 0, 0) + ' disetujui</small></div>' + bar(d.total ? (ps.disetujui || 0) / d.total * 100 : 0, 'ok') +
+        (d.perKat && (d.perKat.latihan || d.perKat.survei) ? '<div class="kecil muted" style="margin-top:8px">Soal TO utama. Terpisah: ' + fmt.angka(d.perKat.latihan || 0, 0) + ' latihan · ' + fmt.angka(d.perKat.survei || 0, 0) + ' survei</div>' : '') + '</div>' +
       '<a class="kartu stat ' + (review ? 'waspada' : '') + '" href="#/admin/review" style="text-decoration:none;color:inherit"><div class="lab">Menunggu review</div><div class="ang">' + review + '<small>' + (ps.bermasalah || 0) + ' bermasalah</small></div>' + bar(d.total ? review / d.total * 100 : 0, 'warn') + '</a>' +
       '<a class="kartu stat" href="#/admin/pembahasan" style="text-decoration:none;color:inherit"><div class="lab">Pembahasan menunggu persetujuan</div><div class="ang">' + (d.bahasMenunggu || 0) + '<small>' + (d.tanpaBahas || 0) + ' soal belum ada</small></div>' + (d.kunciBeda ? '<div class="kecil" style="color:var(--bad-ink);margin-top:10px">' + d.kunciBeda + ' kunci berbeda dengan AI</div>' : bar(0)) + '</a>' +
       '<a class="kartu stat" href="#/admin/monitoring" style="text-decoration:none;color:inherit"><div class="lab">Try out aktif</div><div class="ang">' + (d.paketAktif || []).length + '<small>' + d.jumlahSiswa + ' siswa terdaftar</small></div><div class="kecil muted" style="margin-top:10px">' + ((d.paketAktif || []).map((p) => esc(p.nama)).slice(0, 2).join(', ') || 'Tidak ada paket aktif') + '</div></a></div>' +
@@ -382,7 +387,7 @@
         '<div class="baris dua">' + field('Ambang keyakinan AI (%)', '<input class="inp" type="number" min="50" max="99" data-set="AMBANG_YAKIN" value="' + esc(s.AMBANG_YAKIN) + '">', 'Di bawahnya → bermasalah.') +
         field('Gaya bahasa pembahasan', '<select class="inp" data-set="GAYA_PEMBAHASAN">' + opsi([{ v: 'sederhana', l: 'Sederhana, ramah siswa' }, { v: 'formal', l: 'Baku & ringkas' }, { v: 'rinci', l: 'Sangat rinci' }], s.GAYA_PEMBAHASAN) + '</select>') + '</div></section>' +
         '<section class="kartu"><div class="kartu-kepala"><h2>Bentuk soal & penilaian</h2></div><div class="lbl" style="margin-bottom:8px">Bentuk soal aktif</div><div class="baris" style="margin-bottom:14px">' +
-        Object.keys(BENTUK_LABEL).map((k) => '<label class="cek"><input type="checkbox" class="p-bentuk" value="' + k + '"' + (bent.indexOf(k) >= 0 ? ' checked' : '') + '>' + esc(BENTUK_LABEL[k]) + '</label>').join('') + '</div>' +
+        Object.keys(BENTUK_LABEL).filter((k) => k !== 'SKALA').map((k) => '<label class="cek"><input type="checkbox" class="p-bentuk" value="' + k + '"' + (bent.indexOf(k) >= 0 ? ' checked' : '') + '>' + esc(BENTUK_LABEL[k]) + '</label>').join('') + '</div>' +
         '<div class="baris dua">' + field('Ambang penguasaan kompetensi (%)', '<input class="inp" type="number" min="40" max="100" data-set="AMBANG_KUASA" value="' + esc(s.AMBANG_KUASA) + '">') +
         field('Penilaian PGK', '<select class="inp" data-set="MODE_PGK">' + opsi([{ v: 'parsial', l: 'Parsial (proporsional)' }, { v: 'penuh', l: 'Penuh (semua harus benar)' }], s.MODE_PGK) + '</select>') + '</div></section>' +
         '<section class="kartu"><div class="kartu-kepala"><h2>Aturan ujian</h2></div><div class="baris dua">' +
@@ -391,6 +396,23 @@
         field('Cek tanggal lahir saat konfirmasi', '<select class="inp" data-set="CEK_TGL_LAHIR">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak' }], s.CEK_TGL_LAHIR) + '</select>') +
         field('Tampilkan nilai ke siswa setelah selesai', '<select class="inp" data-set="TAMPIL_NILAI">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak (diumumkan guru)' }], s.TAMPIL_NILAI) + '</select>') +
         field('Membuka tab baru saat ujian', '<select class="inp" data-set="LARANG_TAB_BARU">' + opsi([{ v: 'ya', l: 'Dilarang — tampilkan peringatan "akhiri ujian?"' }, { v: 'tidak', l: 'Hanya dicatat' }], s.LARANG_TAB_BARU || 'ya') + '</select>', 'Siswa yang kembali dari tab/aplikasi lain ditanya: akhiri ujian (Ya) atau lanjut mengerjakan (Tidak).') + '</div></section></div>' +
+        '<section class="kartu" style="margin-top:16px" id="p-subtes"><div class="kartu-kepala"><div><h2>Subtes, transisi &amp; tampilan akhir</h2><p>Alur ujian: ' + esc(s.LABEL_LATIHAN || 'Latihan') + ' → ' + esc(s.LABEL_UTAMA || 'TO Utama') + ' → ' + esc(s.LABEL_SURVEI || 'Survei') + '. Durasi di sini adalah bawaan paket baru; tiap paket bisa diatur sendiri di menu Paket TO.</p></div>' +
+          '<button type="button" class="btn kecil" data-p="demoTransisi">' + ik('mata') + 'Coba tampilan transisi</button></div><div class="kisi k2"><div>' +
+        '<div class="lbl" style="margin-bottom:6px">Nama subtes</div><div class="baris" style="grid-template-columns:repeat(3,minmax(0,1fr))">' + field('Latihan', '<input class="inp" data-set="LABEL_LATIHAN" value="' + esc(s.LABEL_LATIHAN || 'Latihan') + '">') +
+          field('Utama (dinilai)', '<input class="inp" data-set="LABEL_UTAMA" value="' + esc(s.LABEL_UTAMA || 'TO Utama') + '">') + field('Survei', '<input class="inp" data-set="LABEL_SURVEI" value="' + esc(s.LABEL_SURVEI || 'Survei Lingkungan Belajar') + '">') + '</div>' +
+        '<div class="lbl" style="margin-bottom:6px">Durasi bawaan (menit)</div><div class="baris" style="grid-template-columns:repeat(3,minmax(0,1fr))">' + field('Latihan', '<input class="inp" type="number" min="1" max="180" data-set="SUBTES_LATIHAN_MENIT" value="' + esc(s.SUBTES_LATIHAN_MENIT || 5) + '">') +
+          field('Utama', '<input class="inp" type="number" min="5" max="600" data-set="SUBTES_UTAMA_MENIT" value="' + esc(s.SUBTES_UTAMA_MENIT || 75) + '">') + field('Survei', '<input class="inp" type="number" min="1" max="180" data-set="SUBTES_SURVEI_MENIT" value="' + esc(s.SUBTES_SURVEI_MENIT || 25) + '">') + '</div>' +
+        '<div class="lbl" style="margin-bottom:6px">Waktu tunggu transisi bawaan (detik, 0–900)</div><div class="baris dua">' + field('Sebelum subtes utama', '<input class="inp" type="number" min="0" max="900" data-set="TUNGGU_UTAMA_DETIK" value="' + esc(s.TUNGGU_UTAMA_DETIK == null ? 30 : s.TUNGGU_UTAMA_DETIK) + '">') +
+          field('Sebelum survei', '<input class="inp" type="number" min="0" max="900" data-set="TUNGGU_SURVEI_DETIK" value="' + esc(s.TUNGGU_SURVEI_DETIK == null ? 30 : s.TUNGGU_SURVEI_DETIK) + '">') + '</div>' +
+        '<div class="baris dua">' + field('Setelah waktu tunggu habis', '<select class="inp" data-set="TRANSISI_MULAI">' + opsi([{ v: 'otomatis', l: 'Subtes berikutnya dimulai otomatis' }, { v: 'manual', l: 'Siswa menekan tombol Mulai' }], s.TRANSISI_MULAI || 'otomatis') + '</select>', 'Mode manual: waktu subtes baru berjalan saat tombol ditekan (maks. 10 menit terlambat).') +
+          field('Animasi waktu tunggu', '<select class="inp" data-set="TRANSISI_GAYA">' + opsi([{ v: 'napas', l: 'Panduan tarik napas (menenangkan)' }, { v: 'cincin', l: 'Cincin hitung mundur' }, { v: 'tips', l: 'Tips mengerjakan bergantian' }, { v: 'polos', l: 'Sederhana (titik memuat)' }], s.TRANSISI_GAYA || 'napas') + '</select>') + '</div></div><div>' +
+        field('Pesan sebelum subtes utama', '<textarea class="inp" rows="3" data-set="TRANSISI_PESAN_UTAMA">' + esc(s.TRANSISI_PESAN_UTAMA || '') + '</textarea>') +
+        field('Pesan sebelum survei', '<textarea class="inp" rows="3" data-set="TRANSISI_PESAN_SURVEI">' + esc(s.TRANSISI_PESAN_SURVEI || '') + '</textarea>') +
+        field('Tips saat menunggu (satu per baris)', '<textarea class="inp" rows="4" data-set="TRANSISI_TIPS">' + esc(s.TRANSISI_TIPS || '') + '</textarea>', 'Dipakai animasi "Tips mengerjakan".') + '</div></div>' +
+        '<div class="lbl" style="margin:6px 0">Tampilan setelah siswa menyelesaikan semua subtes</div><div class="baris dua">' +
+          field('Animasi hasil', '<select class="inp" data-set="HASIL_ANIMASI">' + opsi([{ v: 'perayaan', l: 'Perayaan (konfeti + nilai naik)' }, { v: 'naik', l: 'Nilai naik perlahan saja' }, { v: 'tanpa', l: 'Tanpa animasi' }], s.HASIL_ANIMASI || 'perayaan') + '</select>') +
+          field('Tabel pembanding TO sebelumnya', '<select class="inp" data-set="HASIL_BANDING">' + opsi([{ v: 'ya', l: 'Tampilkan otomatis' }, { v: 'tidak', l: 'Sembunyikan' }], s.HASIL_BANDING || 'ya') + '</select>') + '</div>' +
+        field('Pesan di halaman hasil', '<textarea class="inp" rows="2" data-set="HASIL_PESAN">' + esc(s.HASIL_PESAN || '') + '</textarea>', 'Nilai yang tampil hanya dari subtes utama, lengkap dengan kelebihan dan kekurangan siswa per kompetensi. Tampil/sembunyi nilai tetap mengikuti "Tampilkan nilai ke siswa".') + '</section>' +
         '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Status sistem</h2><p>Cache server, pemicu, dan kuota.</p></div><div><button class="btn kecil" data-p="status">' + ik('segar') + 'Periksa</button> <button class="btn kecil" data-p="cache">Bangun ulang cache</button></div></div><div id="p-status" class="kecil muted">Tekan Periksa.</div></section>' +
         '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Motivasi &amp; doa siswa</h2><p>Tampil di beranda siswa dan dibaca sebelum memasukkan token ujian.</p></div></div><div class="kisi k2"><div>' +
         field('Tampilkan ke siswa', '<select class="inp" data-set="MOTIVASI_TAMPIL">' + opsi([{ v: 'ya', l: 'Ya' }, { v: 'tidak', l: 'Tidak' }], s.MOTIVASI_TAMPIL || 'ya') + '</select>') +
@@ -426,6 +448,13 @@
           const r = await api('rahasia.simpan', { kunci: a === 'kunci' ? 'GEMINI_API_KEY' : 'GEMINI_MODEL', nilai: v });
           toast(r.message, r.success ? 'ok' : 'err');
           if (r.success && a === 'kunci') { $('#p-kunci', el).value = ''; $('#p-kunci', el).placeholder = r.data.samar; $('#p-ai', el).innerHTML = lencana('Kunci terpasang', 'ok'); Admin.b().ai.ada = true; }
+        }
+        if (a === 'demoTransisi') {
+          const v = (k) => ($('[data-set=' + k + ']', el) || {}).value || '';
+          const lab = { latihan: v('LABEL_LATIHAN') || 'Latihan', utama: v('LABEL_UTAMA') || 'TO Utama', survei: v('LABEL_SURVEI') || 'Survei' };
+          CBT.demoTransisi({ detik: Math.min(15, Math.max(3, Number(v('TUNGGU_UTAMA_DETIK')) || 10)),
+            rencana: [{ k: 'latihan', label: lab.latihan, d: +v('SUBTES_LATIHAN_MENIT') || 5, n: 3 }, { k: 'utama', label: lab.utama, d: +v('SUBTES_UTAMA_MENIT') || 75, n: 40 }, { k: 'survei', label: lab.survei, d: +v('SUBTES_SURVEI_MENIT') || 25, n: 20 }],
+            transisi: { mode: v('TRANSISI_MULAI'), gaya: v('TRANSISI_GAYA'), pesan: { utama: v('TRANSISI_PESAN_UTAMA'), survei: v('TRANSISI_PESAN_SURVEI') }, tips: v('TRANSISI_TIPS').split('\n').map((x) => x.trim()).filter(Boolean) } });
         }
         if (a === 'status') statusSistem(el);
         if (a === 'cache') { const r = await api('sistem.segarkan', {}); toast(r.message, r.success ? 'ok' : 'err'); statusSistem(el); }

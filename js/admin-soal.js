@@ -8,13 +8,22 @@
 
   // ============================================================ EDITOR SOAL
   const Editor = window.SoalEditor = {};
+  const KAT = ['utama', 'latihan', 'survei'];
+  const SKALA_BAWAAN = { setuju: ['Sangat setuju', 'Setuju', 'Tidak setuju', 'Sangat tidak setuju'], sering: ['Selalu', 'Sering', 'Jarang', 'Tidak pernah'] };
+  const bentukUntuk = (kat) => Object.keys(BENTUK_LABEL).filter((k) => k !== 'SKALA' || kat === 'survei').map((k) => ({ v: k, l: BENTUK_LABEL[k] }));
+  const infoKat = (kat) => kat === 'survei' ? '<div class="alert info" style="margin-bottom:14px">' + ik('info') + '<div>Soal <b>survei</b> dipakai di subtes ' + esc(Admin.labelKat('survei')) + ': tidak dinilai dan tidak memerlukan kunci jawaban. Untuk pernyataan bersikap (Sangat setuju … Sangat tidak setuju) pakai bentuk <b>Skala sikap</b>. Kompetensi boleh dikosongkan.</div></div>'
+    : kat === 'latihan' ? '<div class="alert info" style="margin-bottom:14px">' + ik('info') + '<div>Soal <b>latihan</b> dikerjakan di subtes ' + esc(Admin.labelKat('latihan')) + ' sebelum TO utama, terpisah dari soal TO dan tidak dihitung ke nilai siswa.</div></div>' : '';
+  /** Kategori bawaan untuk soal baru (mengikuti tab bank soal yang sedang dibuka). */
+  Editor.katBawaan = 'utama';
   Editor.html = function (s, stim) {
     s = s || {}; stim = stim || null;
-    const mapel = s.mapel || Admin.mapelSaya()[0] || '';
+    const mapel = s.mapel || Admin.mapelSaya()[0] || '', kat = s.kat || (s.id ? 'utama' : Editor.katBawaan) || 'utama';
     return '<div class="e-form"><div class="baris">' +
+      field('Kategori soal', '<select class="inp" data-e="kat">' + opsi(KAT.map((k) => ({ v: k, l: Admin.labelKat(k) + (k === 'utama' ? ' (dinilai)' : '') })), kat) + '</select>') +
       field('Mapel', '<select class="inp" data-e="mapel">' + opsi(Admin.mapelSaya(), mapel) + '</select>') +
-      field('Bentuk soal', '<select class="inp" data-e="bentuk">' + opsi(Object.keys(BENTUK_LABEL).map((k) => ({ v: k, l: BENTUK_LABEL[k] })), s.bentuk || 'PG') + '</select>') +
+      field('Bentuk soal', '<select class="inp" data-e="bentuk">' + opsi(bentukUntuk(kat), s.bentuk || (kat === 'survei' ? 'SKALA' : 'PG')) + '</select>') +
       field('Kesulitan', '<select class="inp" data-e="kes">' + opsi(['mudah', 'sedang', 'sulit'], s.kes || 'sedang') + '</select>') + '</div>' +
+      '<div data-e="katInfo">' + infoKat(kat) + '</div>' +
       '<div class="baris dua">' + field('Kompetensi', '<select class="inp" data-e="idk"></select>') + field('Sub kompetensi', '<select class="inp" data-e="ids"></select>') + '</div>' +
       '<details class="kartu" style="padding:12px 14px;margin-bottom:14px"' + (stim ? ' open' : '') + '><summary style="cursor:pointer;font-weight:600">Stimulus (bacaan, tabel, grafik) ' + (stim ? '— ' + esc(stim.judul || stim.id) : '') + '</summary>' +
       '<div style="margin-top:12px"><div class="baris dua">' + field('Pakai stimulus', '<select class="inp" data-e="stimPilih"><option value="">Tanpa stimulus</option>' + (stim ? '<option value="' + esc(stim.id) + '" selected>' + esc(stim.id + ' — ' + (stim.judul || '')) + '</option>' : '') + '<option value="__baru">+ Stimulus baru</option></select>') +
@@ -31,7 +40,7 @@
   Editor.pasang = function (root, s, stim) {
     s = s || {};
     const q = (k) => root.querySelector('[data-e="' + k + '"]');
-    let bentuk = s.bentuk || 'PG', fokus = q('teks');
+    let bentuk = q('bentuk').value || s.bentuk || 'PG', fokus = q('teks');
     const isiKomp = () => {
       const m = q('mapel').value, k = Admin.kompMapel(m);
       q('idk').innerHTML = opsi(k.map((x) => ({ v: x.id, l: x.kode + ' — ' + x.nama })), s.idk, k.length ? '— pilih —' : 'Belum ada kompetensi');
@@ -60,6 +69,12 @@
     q('stimKonten').addEventListener('input', () => { root.dataset.stimUbah = '1'; });
     q('stimJudul').addEventListener('input', () => { root.dataset.stimUbah = '1'; });
     q('bentuk').onchange = () => { const lama = Editor.kumpul(root, true); bentuk = q('bentuk').value; renderOpsi(Object.assign({}, lama, { bentuk })); prev(); };
+    q('kat').onchange = () => {
+      const kat = q('kat').value, cur = q('bentuk').value;
+      q('bentuk').innerHTML = opsi(bentukUntuk(kat), cur === 'SKALA' && kat !== 'survei' ? 'PG' : cur);
+      q('katInfo').innerHTML = infoKat(kat);
+      if (q('bentuk').value !== cur) q('bentuk').onchange();
+    };
     const renderOpsi = (x) => { q('opsiArea').innerHTML = opsiHtml(x.bentuk || bentuk, x); };
     renderOpsi(s);
     const prev = debounce(() => {
@@ -73,6 +88,7 @@
       if (!b) return;
       const x = Editor.kumpul(root, true);
       if (b.dataset.o === 'tambah' && Array.isArray(x.opsi) && x.opsi.length < 5) x.opsi.push({ k: HURUF[x.opsi.length], t: '' });
+      if (b.dataset.o === 'skala') x.opsi = SKALA_BAWAAN[b.dataset.v].map((t, i) => ({ k: HURUF[i], t }));
       if (b.dataset.o === 'hapus') { x.opsi.splice(+b.dataset.i, 1); x.opsi.forEach((o, i) => { o.k = HURUF[i]; }); x.kunci = null; }
       if (b.dataset.o === 'tambahP') x.opsi.pernyataan.push({ t: '' });
       if (b.dataset.o === 'hapusP') { x.opsi.pernyataan.splice(+b.dataset.i, 1); if (Array.isArray(x.kunci)) x.kunci.splice(+b.dataset.i, 1); }
@@ -100,6 +116,14 @@
   };
   function opsiHtml(b, x) {
     const k = x.kunci;
+    if (b === 'SKALA') {
+      const o = Array.isArray(x.opsi) && x.opsi.length ? x.opsi : SKALA_BAWAAN.setuju.map((t, i) => ({ k: HURUF[i], t }));
+      return '<div class="lbl" style="margin-bottom:8px">Pilihan skala — urut dari kiri ke kanan, tanpa kunci jawaban</div>' +
+        o.map((op, i) => '<div class="opsi-ed" style="grid-template-columns:34px 1fr 36px"><span class="huruf">' + HURUF[i] + '</span><textarea class="inp o-teks" rows="1" data-oi="' + i + '">' + esc(op.t) + '</textarea>' +
+          '<button class="btn kecil ikon hantu" data-o="hapus" data-i="' + i + '" aria-label="Hapus pilihan">' + ik('hapus') + '</button></div>').join('') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (o.length < 5 ? '<button class="btn kecil" data-o="tambah">' + ik('tambah') + 'Tambah pilihan</button>' : '') +
+        '<button class="btn kecil" data-o="skala" data-v="setuju">Isi: Sangat setuju … Sangat tidak setuju</button><button class="btn kecil" data-o="skala" data-v="sering">Isi: Selalu … Tidak pernah</button></div>';
+    }
     if (b === 'PG' || b === 'PGK_MCMA') {
       const o = Array.isArray(x.opsi) && x.opsi.length ? x.opsi : HURUF.slice(0, 4).split('').map((h) => ({ k: h, t: '' }));
       const kun = [].concat(k || []);
@@ -131,8 +155,9 @@
   Editor.kumpul = function (root, longgar) {
     const q = (k) => root.querySelector('[data-e="' + k + '"]');
     const b = q('bentuk').value;
-    const s = { bentuk: b, mapel: q('mapel').value, idk: q('idk').value, ids: q('ids').value, kes: q('kes').value, teks: q('teks').value, catatan: q('catatan').value };
-    if (b === 'PG' || b === 'PGK_MCMA') {
+    const s = { bentuk: b, mapel: q('mapel').value, idk: q('idk').value, ids: q('ids').value, kes: q('kes').value, teks: q('teks').value, catatan: q('catatan').value, kat: q('kat') ? q('kat').value : 'utama' };
+    if (b === 'SKALA') { s.opsi = $$('[data-oi]', root).map((t, i) => ({ k: HURUF[i], t: t.value })); s.kunci = null; }
+    else if (b === 'PG' || b === 'PGK_MCMA') {
       s.opsi = $$('[data-oi]', root).map((t, i) => ({ k: HURUF[i], t: t.value }));
       const c = $$('[name=e-kunci]:checked', root).map((x) => x.value);
       s.kunci = b === 'PG' ? (c[0] || null) : c;
@@ -178,7 +203,8 @@
       el.innerHTML = Admin.kepala('Unggah dokumen & ekstraksi AI', 'PDF ketik, PDF scan, Word, atau foto soal dipecah per halaman, dibaca AI, lalu masuk antrean review.') +
         (Admin.b().ai.ada ? '' : '<div class="alert warn">' + ik('awas') + '<div>Kunci API Gemini belum diisi. ' + (Admin.sa() ? '<a href="#/admin/pengaturan">Isi di Pengaturan</a>.' : 'Minta Super Admin mengisinya.') + '</div></div>') +
         '<div class="kisi k2"><section class="kartu"><div class="kartu-kepala"><h2>1. Atur unggahan</h2></div>' +
-        field('Mata pelajaran', '<select class="inp" id="u-mapel">' + opsi(Admin.mapelSaya(), Admin.mapelSaya()[0]) + '</select>') +
+        '<div class="baris dua">' + field('Mata pelajaran', '<select class="inp" id="u-mapel">' + opsi(Admin.mapelSaya(), Admin.mapelSaya()[0]) + '</select>') +
+        field('Kategori soal dalam berkas', '<select class="inp" id="u-kat">' + opsi(KAT.map((k) => ({ v: k, l: Admin.labelKat(k) })), 'utama') + '</select>', 'Latihan & survei disimpan terpisah dari soal TO utama.') + '</div>' +
         field('Mode hasil ekstraksi', '<div class="radio-kartu"><label><input type="radio" name="u-mode" value="review"' + (set.MODE_EKSTRAK !== 'otomatis' ? ' checked' : '') + '><span><b>Review manual</b> · disarankan<br><span class="kecil muted">Semua soal ditinjau guru sebelum masuk bank soal.</span></span></label>' +
           '<label><input type="radio" name="u-mode" value="otomatis"' + (set.MODE_EKSTRAK === 'otomatis' ? ' checked' : '') + '><span><b>Otomatis penuh</b><br><span class="kecil muted">Soal tanpa masalah langsung disetujui; yang bermasalah tetap masuk antrean.</span></span></label></div>') +
         '<label class="zona" id="u-zona"><input type="file" id="u-file" accept=".pdf,.docx,.jpg,.jpeg,.png" multiple hidden>' + ik('unggah') + '<b>Tarik berkas ke sini atau pilih berkas</b><span class="kecil muted">PDF, DOCX, JPG/PNG (beberapa foto = beberapa halaman). Maks ±25 MB.</span></label>' +
@@ -270,7 +296,7 @@
       if (!job || word) {
         const kirimAsli = $('#u-asli', el).checked && f.size < 15e6;
         log(el, word ? 'Mengunggah dokumen Word untuk dikonversi…' : 'Membuat job ekstraksi…');
-        const r = await api('job.buat', { nama_file: files.length > 1 ? files.length + ' gambar (' + f.name + ', …)' : f.name, mapel: $('#u-mapel', el).value,
+        const r = await api('job.buat', { nama_file: files.length > 1 ? files.length + ' gambar (' + f.name + ', …)' : f.name, mapel: $('#u-mapel', el).value, kategori: $('#u-kat', el).value,
           mode: (el.querySelector('[name=u-mode]:checked') || {}).value, jumlah_halaman: 0, mime: f.type, b64: (kirimAsli || word) ? await bacaB64(f) : '' });
         if (!r.success) throw new Error(r.message);
         jobBaru = r.data;
@@ -372,7 +398,7 @@
     el.list = list;
     Admin.badge('review', semua.filter((s) => s.status !== 'disetujui').length);
     $('#r-daftar', el).innerHTML = list.length ? list.map((s) => '<div class="item' + (s.id === el.aktif ? ' aktif' : '') + '" data-id="' + esc(s.id) + '"><input type="checkbox" data-rid="' + esc(s.id) + '"' + (el.pilih.has(s.id) ? ' checked' : '') + '>' +
-      '<div><div style="display:flex;justify-content:space-between;gap:6px;align-items:center"><span class="chip-id">' + esc(s.id) + '</span>' + Admin.status(s.status) + '</div>' +
+      '<div><div style="display:flex;justify-content:space-between;gap:6px;align-items:center"><span><span class="chip-id">' + esc(s.id) + '</span> ' + Admin.kat(s.kat) + '</span>' + Admin.status(s.status) + '</div>' +
       '<p class="ringkas">' + esc(s.ring || '(tanpa teks)') + '</p><div class="kecil muted" style="margin-top:4px">' + esc((BENTUK_LABEL[s.bentuk] || s.bentuk)) + (s.hal ? ' · hal ' + s.hal : '') + (s.yakin ? ' · yakin ' + s.yakin + '%' : '') + '</div>' +
       (s.cat ? '<div class="kecil" style="color:var(--warn-ink);margin-top:4px">' + esc(s.cat) + '</div>' : '') + '</div></div>').join('')
       : '<div class="kosong"><strong>Antrean kosong</strong>Tidak ada soal yang menunggu dengan filter ini.</div>';
@@ -463,7 +489,7 @@
     judul: 'Bank Soal', ikon: 'bank', grup: 'Manajemen soal',
     render(el) {
       el.innerHTML = Admin.kepala('Bank soal', 'Telusuri, saring, dan kelola seluruh butir soal.', '<button class="btn" data-b="ekspor">' + ik('unduh') + 'Ekspor Excel</button><button class="btn utama" data-b="baru">' + ik('tambah') + 'Buat soal manual</button>') +
-        '<div class="kisi k4" id="b-stat" style="margin-bottom:16px"></div>' +
+        '<div class="tab" id="b-kat" role="tablist" style="margin-bottom:12px"></div><div class="kisi k4" id="b-stat" style="margin-bottom:16px"></div>' +
         '<div class="kartu" style="padding:14px"><div class="saring" style="margin-bottom:0"><input class="inp cari" id="b-cari" placeholder="Cari teks soal, ID (MAT-0012), sumber…">' +
         '<select class="inp" data-f="mapel">' + opsi(Admin.mapelSaya(), '', 'Semua mapel') + '</select><select class="inp" data-f="idk"></select>' +
         '<select class="inp" data-f="bentuk">' + opsi(Object.keys(BENTUK_LABEL).map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua bentuk') + '</select>' +
@@ -474,7 +500,7 @@
         '<button class="btn kecil" data-b="tinjau">Tandai ditinjau</button><button class="btn kecil" data-b="bahas">' + ik('bahas') + 'Generate pembahasan</button>' +
         (Admin.sa() ? '<button class="btn kecil" data-b="paket">' + ik('paket') + 'Masukkan ke paket</button>' : '') + '<button class="btn kecil" data-b="eksporPilih">' + ik('unduh') + 'Ekspor terpilih</button><button class="btn kecil bahaya" data-b="hapus">' + ik('hapus') + 'Hapus</button></div>' +
         '<div class="tbl-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th class="cek-sel"><input type="checkbox" id="b-semua"></th><th>ID &amp; sumber</th><th>Teks soal</th><th>Bentuk</th><th>Kompetensi</th><th>Kesulitan</th><th>Status</th><th>Bahas</th></tr></thead><tbody id="b-isi"></tbody></table></div><div class="halaman-nav" id="b-hal"></div>';
-      el.pilih = new Set(); el.hal = 0;
+      el.pilih = new Set(); el.hal = 0; el.kat = 'utama';
       const ulang = () => { el.hal = 0; tabelBank(el); };
       $('#b-cari', el).addEventListener('input', debounce(ulang, 250));
       el.addEventListener('change', (e) => {
@@ -493,18 +519,22 @@
     const f = {};
     $$('[data-f]', el).forEach((x) => { f[x.dataset.f] = x.value; });
     const q = $('#b-cari', el).value.trim().toLowerCase();
-    return (App.data.soal || []).filter((s) => (!f.mapel || s.mapel === f.mapel) && (!f.idk || s.idk === f.idk) && (!f.bentuk || s.bentuk === f.bentuk) && (!f.kes || s.kes === f.kes) &&
+    return (App.data.soal || []).filter((s) => (el.kat === 'semua' || (s.kat || 'utama') === el.kat) && (!f.mapel || s.mapel === f.mapel) && (!f.idk || s.idk === f.idk) && (!f.bentuk || s.bentuk === f.bentuk) && (!f.kes || s.kes === f.kes) &&
       (!f.status || s.status === f.status) && (!f.bahas || (f.bahas === 'ada' ? !!s.bahas : !s.bahas)) && (!q || (s.id + ' ' + s.ring + ' ' + s.sumber).toLowerCase().indexOf(q) >= 0));
   }
   function massalBank(el) { $('#b-massal', el).hidden = !el.pilih.size; $('#b-n', el).textContent = el.pilih.size + ' butir dipilih'; }
   function tabelBank(el) {
-    const semua = App.data.soal || [], list = saringBank(el), per = 25;
+    const seluruh = App.data.soal || [], list = saringBank(el), per = 25;
+    const semua = el.kat === 'semua' ? seluruh : seluruh.filter((s) => (s.kat || 'utama') === el.kat);
+    const nk = (k) => seluruh.filter((s) => (s.kat || 'utama') === k).length;
+    $('#b-kat', el).innerHTML = KAT.map((k) => '<button type="button" data-bk="' + k + '" class="' + (el.kat === k ? 'aktif' : '') + '">Soal ' + esc(Admin.labelKat(k)) + '<span class="hit">' + nk(k) + '</span></button>').join('') +
+      '<button type="button" data-bk="semua" class="' + (el.kat === 'semua' ? 'aktif' : '') + '">Semua kategori<span class="hit">' + seluruh.length + '</span></button>';
     const st = (k) => semua.filter((s) => s.status === k).length;
     $('#b-stat', el).innerHTML = '<div class="kartu stat"><div class="lab">Total butir</div><div class="ang">' + semua.length + '</div></div><div class="kartu stat"><div class="lab">Disetujui</div><div class="ang" style="color:var(--ok)">' + st('disetujui') + '</div></div>' +
       '<div class="kartu stat"><div class="lab">Menunggu tinjauan</div><div class="ang">' + (st('draft') + st('ditinjau')) + '</div></div><div class="kartu stat ' + (st('bermasalah') ? 'waspada' : '') + '"><div class="lab">Bermasalah / duplikat</div><div class="ang" style="color:var(--warn)">' + st('bermasalah') + '</div></div>';
     el.hal = Math.min(el.hal, Math.max(0, Math.ceil(list.length / per) - 1));
     $('#b-isi', el).innerHTML = list.slice(el.hal * per, el.hal * per + per).map((s) => '<tr class="klik" data-buka="' + esc(s.id) + '"><td><input type="checkbox" data-bid="' + esc(s.id) + '"' + (el.pilih.has(s.id) ? ' checked' : '') + '></td>' +
-      '<td><span class="chip-id">' + esc(s.id) + '</span><div class="kecil muted">' + esc(s.sumber || '—') + (s.hal ? ' · hal ' + s.hal : '') + '</div></td><td><div class="ringkas">' + esc(s.ring) + '</div>' + (s.stim ? '<span class="kecil muted">Stimulus ' + esc(s.stim) + '</span>' : '') + '</td>' +
+      '<td><span class="chip-id">' + esc(s.id) + '</span> ' + Admin.kat(s.kat) + '<div class="kecil muted">' + esc(s.sumber || '—') + (s.hal ? ' · hal ' + s.hal : '') + '</div></td><td><div class="ringkas">' + esc(s.ring) + '</div>' + (s.stim ? '<span class="kecil muted">Stimulus ' + esc(s.stim) + '</span>' : '') + '</td>' +
       '<td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td><td>' + esc(s.kes || '—') + '</td><td>' + Admin.status(s.status) + '</td>' +
       '<td>' + (s.kb ? lencana('Kunci beda', 'bad') : s.bahas === 'disetujui' ? lencana('Ya', 'ok') : s.bahas ? lencana('Menunggu', 'warn') : '<span class="muted">—</span>') + '</td></tr>').join('') ||
       '<tr><td colspan="8"><div class="kosong"><strong>Tidak ada soal</strong>Ubah filter atau tambahkan soal baru.</div></td></tr>';
@@ -513,6 +543,8 @@
       (n > 1 ? '<button class="btn kecil" data-pg="' + (el.hal - 1) + '"' + (el.hal ? '' : ' disabled') + '>' + ik('kiri') + '</button><span class="kecil">' + (el.hal + 1) + ' / ' + n + '</span><button class="btn kecil" data-pg="' + (el.hal + 1) + '"' + (el.hal < n - 1 ? '' : ' disabled') + '>' + ik('kanan') + '</button>' : '');
   }
   async function aksiBank(el, e) {
+    const bk = e.target.closest('[data-bk]');
+    if (bk) { el.kat = bk.dataset.bk; el.hal = 0; el.pilih.clear(); massalBank(el); tabelBank(el); return; }
     const pg = e.target.closest('[data-pg]');
     if (pg) { el.hal = +pg.dataset.pg; tabelBank(el); return; }
     const tr = e.target.closest('[data-buka]');
@@ -520,7 +552,7 @@
     const b = e.target.closest('[data-b]');
     if (!b) return;
     const ids = Array.from(el.pilih), a = b.dataset.b;
-    if (a === 'baru') return bukaSoal(null);
+    if (a === 'baru') { Editor.katBawaan = el.kat === 'semua' ? 'utama' : el.kat; return bukaSoal(null); }
     if (a === 'setujui' || a === 'tinjau') {
       const r = await api('soal.status', { ids, status: a === 'setujui' ? 'disetujui' : 'ditinjau' });
       toast(r.message + (r.data && r.data.gagal.length ? ' ' + r.data.gagal.slice(0, 3).join('; ') : ''), r.success ? 'ok' : 'err', 7000);
@@ -534,7 +566,7 @@
     if (a === 'ekspor' || a === 'eksporPilih') {
       const list = a === 'ekspor' ? saringBank(el) : (App.data.soal || []).filter((s) => el.pilih.has(s.id));
       const X = await Lib.xlsx(), wb = X.utils.book_new();
-      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(list.map((s) => ({ ID: s.id, Mapel: s.mapel, Kompetensi: Admin.namaKomp(s.idk), Sub: Admin.namaSub(s.ids), Bentuk: BENTUK_LABEL[s.bentuk] || s.bentuk, Kesulitan: s.kes, Status: s.status, Pembahasan: s.bahas || '-', Sumber: s.sumber, Teks: s.ring }))), 'Bank soal');
+      X.utils.book_append_sheet(wb, X.utils.json_to_sheet(list.map((s) => ({ ID: s.id, Mapel: s.mapel, Kompetensi: Admin.namaKomp(s.idk), Sub: Admin.namaSub(s.ids), Kategori: Admin.labelKat(s.kat), Bentuk: BENTUK_LABEL[s.bentuk] || s.bentuk, Kesulitan: s.kes, Status: s.status, Pembahasan: s.bahas || '-', Sumber: s.sumber, Teks: s.ring }))), 'Bank soal');
       X.writeFile(wb, 'bank-soal-' + new Date().toISOString().slice(0, 10) + '.xlsx');
     }
   }
@@ -553,7 +585,7 @@
       s = r.data.soal[0]; stim = s.id_stimulus ? r.data.stimulus[s.id_stimulus] : null; bahas = r.data.bahas[s.id];
     }
     const box = $('#l-isi', lapis);
-    box.innerHTML = (s ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' + Admin.status(s.status) + Admin.bentuk(s.bentuk) + lencana(s.kes || 'sedang', 'polos') + (s.yakin ? lencana('Keyakinan AI ' + s.yakin + '%', 'info') : '') + '</div>' +
+    box.innerHTML = (s ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' + Admin.status(s.status) + Admin.kat(s.kat) + Admin.bentuk(s.bentuk) + lencana(s.kes || 'sedang', 'polos') + (s.yakin ? lencana('Keyakinan AI ' + s.yakin + '%', 'info') : '') + '</div>' +
       (s.catatan ? '<div class="masalah">' + esc(s.catatan) + '</div>' : '') +
       (bahas ? '<details class="kartu" style="padding:12px 14px;margin-bottom:14px"><summary style="cursor:pointer;font-weight:600">Pembahasan · ' + esc(bahas.status) + '</summary>' + htmlKonten(bahas.isi) + '</details>' : '') : '') +
       '<div id="l-form">' + Editor.html(s || {}, stim) + Editor.tombol(s && s.id) + '</div>';
@@ -584,7 +616,7 @@
       tombol: [{ label: 'Batal' }, { label: 'Tambahkan', kelas: 'utama', aksi: async (m) => {
         const pid = $('#mp-p', m).value, d = await api('paket.detail', { id: pid });
         if (!d.success) { toast(d.message, 'err'); return false; }
-        const ada = d.data.items.map((x) => ({ id_soal: x.id, bobot: x.bobot }));
+        const ada = d.data.items.map((x) => ({ id_soal: x.id, bobot: x.bobot, bagian: x.bagian }));
         const baru = ids.filter((x) => !ada.some((a) => a.id_soal === x)).map((x) => ({ id_soal: x, bobot: 1 }));
         const r2 = await api('paket.soal', { id: pid, items: ada.concat(baru) });
         toast(r2.message, r2.success ? 'ok' : 'err', 7000);
@@ -611,7 +643,7 @@
   });
   function daftarBahas(el) {
     const mp = $('#pb-mapel', el).value, kp = $('#pb-komp', el).value;
-    const dasar = (App.data.soal || []).filter((s) => s.status !== 'bermasalah' && (!mp || s.mapel === mp) && (!kp || s.idk === kp));
+    const dasar = (App.data.soal || []).filter((s) => s.status !== 'bermasalah' && s.kat !== 'survei' && (!mp || s.mapel === mp) && (!kp || s.idk === kp));
     return {
       belum: dasar.filter((s) => !s.bahas), menunggu: dasar.filter((s) => s.bahas === 'menunggu' && !s.kb), kb: dasar.filter((s) => s.kb),
       disetujui: dasar.filter((s) => s.bahas === 'disetujui'), ditolak: dasar.filter((s) => s.bahas === 'ditolak')

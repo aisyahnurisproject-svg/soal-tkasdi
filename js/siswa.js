@@ -6,7 +6,7 @@
   'use strict';
   const Siswa = window.Siswa = {};
   const HURUF = 'ABCDEFGHIJ';
-  const BENTUK_LABEL = { PG: 'Pilihan ganda', PGK_MCMA: 'Pilihan ganda kompleks', PGK_KATEGORI: 'Pilihan ganda kompleks (kategori)', ISIAN: 'Isian singkat', JODOH: 'Menjodohkan', URAIAN: 'Uraian' };
+  const BENTUK_LABEL = { PG: 'Pilihan ganda', PGK_MCMA: 'Pilihan ganda kompleks', PGK_KATEGORI: 'Pilihan ganda kompleks (kategori)', ISIAN: 'Isian singkat', JODOH: 'Menjodohkan', URAIAN: 'Uraian', SKALA: 'Skala sikap (survei)' };
   window.BENTUK_LABEL = BENTUK_LABEL;
 
   // ------------------------------------------------------------ KERANGKA SISWA
@@ -55,6 +55,7 @@
         return '<article class="paket-hero ' + (bisa ? '' : 'redup') + '"><div><span class="label">' + esc(p.mapel) + ' · ' +
           (p.status === 'mengerjakan' ? 'Sedang dikerjakan' : p.status === 'selesai' ? 'Selesai' : belumBuka ? 'Belum dibuka' : 'Siap dikerjakan') + '</span>' +
           '<h2>' + esc(p.nama) + '</h2><div class="meta"><span>' + ik('grid') + ' ' + p.jumlah + ' soal</span><span>' + ik('jam') + ' ' + p.durasi + ' menit</span>' +
+          (p.sub && p.sub.length > 1 ? '<span>' + ik('bendera') + ' ' + p.sub.length + ' subtes: ' + p.sub.map((f) => esc(f.label)).join(' → ') + '</span>' : '') +
           (p.tutup ? '<span>Ditutup ' + fmt.tgl(p.tutup) + '</span>' : '') + '</div>' + (p.deskripsi ? '<p style="margin:10px 0 0;opacity:.9">' + esc(p.deskripsi) + '</p>' : '') + '</div><div>' + tombol + '</div></article>';
       }).join('');
       const riw = (b.riwayat || []);
@@ -111,7 +112,7 @@
       '<div><small>Jenis kelamin</small><b>' + (me.jk === 'P' ? 'Perempuan' : me.jk === 'L' ? 'Laki-laki' : '—') + '</b></div><div><small>Kelas</small><b>' + esc(me.kelas) + '</b></div></div>' +
       '<div style="margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-3)"><small class="muted" style="font-weight:600">Paket ujian</small>' +
       '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-top:4px"><b style="font-size:17px">' + esc(p.nama) + '</b><span>' +
-      lencana(p.jumlah + ' soal', 'navy') + ' ' + lencana(p.durasi + ' menit', 'warn') + '</span></div><div class="kecil muted">' + esc(p.mapel) + '</div></div>' +
+      lencana(p.jumlah + ' soal', 'navy') + ' ' + lencana(p.durasi + ' menit', 'warn') + '</span></div><div class="kecil muted">' + esc(p.mapel) + '</div>' + susunanSubtes(p.sub) + '</div>' +
       '<form id="f-konf" style="margin-top:18px" novalidate><div class="baris dua">' +
       (b.cekTgl && !lanjut ? field('Konfirmasi tanggal lahir', '<input class="inp" type="date" name="tgl" required>', 'Sesuai data sekolah.') : '') +
       (lanjut ? '' : field('Token ujian', '<input class="inp token" name="token" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="••••••">', 'Token dapat berganti berkala. Lihat layar pengawas.')) + '</div>' +
@@ -145,11 +146,26 @@
       go('#/ujian/' + r.data.sid);
     });
   };
+  const fmtJeda = (t) => t >= 60 ? fmt.angka(t / 60) + ' menit' : t + ' detik';
+  /** Alur subtes di halaman konfirmasi: Latihan → TO Utama → Survei (dengan jeda di antaranya). */
+  function susunanSubtes(sub) {
+    if (!sub || sub.length < 2) return '';
+    return '<div class="lbl" style="margin:14px 0 6px">Alur ujian</div><ol class="alur-subtes">' + sub.map((f, i) => '<li class="' + (f.k === 'utama' ? 'utama' : '') + '">' +
+      (i && f.t ? '<span class="jeda">' + ik('jam') + ' jeda ' + fmtJeda(f.t) + '</span>' : '') + '<span class="no">' + (i + 1) + '</span><div><b>' + esc(f.label) + '</b><small>' + f.n + ' soal · ' + f.d + ' menit · ' +
+      (f.k === 'utama' ? 'dinilai' : 'tidak dinilai') + '</small></div></li>').join('') + '</ol>' +
+      '<p class="kecil muted" style="margin:8px 0 0">Setelah kamu menekan <b>Selesai</b> pada satu subtes, layar otomatis berpindah ke subtes berikutnya. Kamu tidak perlu keluar atau masuk ulang.</p>';
+  }
   function layarPenuh() { try { const d = document.documentElement; if (!document.fullscreenElement && d.requestFullscreen) d.requestFullscreen().catch(() => { }); } catch (e) { } }
 
   // ------------------------------------------------------------ LEMBAR UJIAN
   const CBT = window.CBT = { s: null };
   CBT.buka = async function (sid) {
+    const aktif = CBT.s;
+    if (aktif && aktif.sid === sid && !aktif.selesai && !aktif.preview && aktif.el && aktif.el.isConnected) {   // sudah berjalan: tampilkan lagi, jangan mulai ulang
+      document.body.className = 'mode-ujian';
+      Router.tampil('ujian', () => { }).hidden = false;
+      return;
+    }
     let data = App.data.ujian && App.data.ujian.sid === sid ? App.data.ujian : null;
     if (!data) {
       const meta = Store.get('cbtmeta:' + sid, null);
@@ -164,37 +180,215 @@
     }
     CBT.mulai(data, {});
   };
-  /** data: {sid, paket, soal, stim, simpan, sisa, kebijakan}; opt.preview = pratinjau admin (tanpa simpan/timer). */
+  /**
+   * data: {sid, paket, soal, stim, simpan, sisa, kebijakan, fase, rencana, transisi, hasilSet}; opt.preview = pratinjau admin (tanpa simpan/timer).
+   * Satu sesi bisa berisi beberapa subtes (latihan → TO utama → survei). Pergantian subtes terjadi di layar yang sama, tanpa keluar/masuk ulang.
+   */
   CBT.mulai = function (data, opt) {
     opt = opt || {};
+    if (CBT.s && !CBT.s.selesai) lepasCbt(false);
     const lokal = opt.preview ? null : Store.get('cbt:' + data.sid, null);
     const sv = data.simpan || {};
     const s = CBT.s = {
-      sid: data.sid, paket: data.paket, soal: data.soal, stim: data.stim || {}, preview: !!opt.preview,
+      sid: data.sid, paket: data.paket, soal: [], stim: {}, preview: !!opt.preview,
       j: Object.assign({}, sv.j, lokal ? lokal.j : {}), rg: Object.assign({}, sv.rg, lokal ? lokal.rg : {}), d: Object.assign({}, sv.d, lokal ? lokal.d : {}),
-      pt: Math.max(sv.pt || 0, lokal ? lokal.pt || 0 : 0), idx: lokal ? Math.min(lokal.idx || 0, data.soal.length - 1) : 0,
+      pt: Math.max(sv.pt || 0, lokal ? lokal.pt || 0 : 0), idx: 0,
       font: Store.get('cbt_font', 16), batas: (data.kebijakan || {}).batasTab || 3,
-      akhir: performance.now() + (data.sisa || 0) * 1000, kotor: false, kirim: false, lastSync: Date.now(), selesai: false, tMasuk: Date.now(), ptAkhir: 0, peringat: {},
-      kebijakan: data.kebijakan || {}, tMulai: Date.now()
+      akhir: 0, kotor: false, kirim: false, lastSync: Date.now(), selesai: false, tMasuk: Date.now(), ptAkhir: 0, peringat: {},
+      kebijakan: data.kebijakan || {}, tMulai: Date.now(),
+      rencana: data.rencana && data.rencana.length ? data.rencana : null, transisi: data.transisi || {}, hasilSet: data.hasilSet || {},
+      fase: data.fase || { i: 0, k: 'utama', label: '', nomor: 1, total: 1 }, posisi: 'soal', paketAsli: data.paket, semua: data.soal || [], stimSemua: data.stim || {}
     };
-    [1800, 900].forEach((t) => { if ((data.sisa || 0) <= t) s.peringat[t] = 1; });
     document.body.className = 'mode-ujian';
     Router.buang('ujian');
-    const el = Router.tampil('ujian', (x) => { x.innerHTML = cbtHtml(); });
-    el.hidden = false;
-    pasangCbt(el);
-    tampilSoal(s.idx);
+    s.el = Router.tampil('ujian', () => { });
+    s.el.hidden = false;
+    pasangCbt(s.el);
     if (!s.preview) {
       s.tik = setInterval(tikWaktu, 1000);
-      s.sinkron = setInterval(() => { if (s.kotor) kirim(); }, 30000);
-      tikWaktu();
-    } else { $('#cbt-waktu b').textContent = data.paket.durasi + ':00'; }
+      s.sinkron = setInterval(() => { if (s.kotor && s.posisi === 'soal') kirim(); }, 30000);
+    }
+    if (s.preview) aturFase(s.rencana ? faseLokal(0) : { paket: data.paket, soal: s.semua, stim: s.stimSemua, sisa: 0 }, null);
+    else if (s.fase.menunggu) { s.stim = data.stim || {}; tampilTransisi(s.fase.sisaTunggu || 0); }
+    else aturFase(Object.assign({}, data, { simpan: null }), lokal);
+    if (!s.preview) App.data.ujian = null;                    // pemulihan berikutnya selalu minta posisi subtes terbaru ke server
+  };
+  const terakhirFase = () => { const s = CBT.s; return !s.rencana || s.fase.i >= s.rencana.length - 1; };
+  /** Pasang soal satu subtes ke layar ujian. */
+  function aturFase(data, lokal) {
+    const s = CBT.s;
+    s.paket = data.paket || s.paket; s.soal = data.soal || []; s.stim = Object.assign({}, s.stim, data.stim || {});
+    if (data.fase) s.fase = data.fase;
+    if (data.rencana && data.rencana.length) s.rencana = data.rencana;
+    if (data.transisi) s.transisi = data.transisi;
+    if (data.simpan) { s.j = Object.assign({}, data.simpan.j, s.j); s.rg = Object.assign({}, data.simpan.rg, s.rg); s.d = Object.assign({}, data.simpan.d, s.d); s.pt = Math.max(s.pt, data.simpan.pt || 0); }
+    s.idx = lokal && (lokal.fi == null ? 0 : lokal.fi) === s.fase.i ? Math.max(0, Math.min(lokal.idx || 0, s.soal.length - 1)) : 0;
+    s.akhir = performance.now() + (data.sisa || 0) * 1000;
+    s.peringat = {};
+    [1800, 900].forEach((t) => { if ((data.sisa || 0) <= t) s.peringat[t] = 1; });
+    s.posisi = 'soal'; s.memulai = false; s.tMasuk = Date.now();
+    clearInterval(s.tikT);
+    $$('.lapis').forEach((x) => { if (x.querySelector('.panel-soal')) x.remove(); });
+    s.el.innerHTML = cbtHtml();
+    tampilSoal(s.idx);
+    if (s.preview) $('#cbt-waktu b').textContent = s.paket.durasi + ':00';
+    else { simpanLokal(); tikWaktu(); }
+  }
+  /** Pratinjau admin: susun data subtes ke-i dari semua soal paket (tanpa server). */
+  function faseLokal(i) {
+    const s = CBT.s, f = s.rencana[i];
+    return { paket: Object.assign({}, s.paketAsli, { durasi: f.d }), soal: s.semua.filter((q) => (q.g || 'utama') === f.k), stim: s.stimSemua, sisa: 0,
+      fase: { i, k: f.k, label: f.label, nomor: i + 1, total: s.rencana.length, menunggu: false, sisaTunggu: 0, d: f.d } };
+  }
+
+  // ------------------------------------------------------------ TRANSISI ANTARSUBTES (waktu tunggu + animasi pilihan admin)
+  /** o: {rencana, i, transisi, judul, preview, sisa} → HTML layar transisi. Dipakai juga untuk demo di Pengaturan. */
+  function transisiHtml(o) {
+    const R = o.rencana || [], i = o.i, f = R[i] || {}, prev = R[i - 1], tr = o.transisi || {}, gaya = tr.gaya || 'napas';
+    const pesan = (tr.pesan || {})[f.k] || '';
+    const tips = tr.tips || [];
+    const anim = {
+      napas: '<div class="tr-napas" aria-hidden="true"><i></i></div><p class="tr-napas-teks" data-tr="napas">Tarik napas perlahan…</p>',
+      cincin: '<div class="tr-cincin" aria-hidden="true"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="dasar"></circle><circle cx="60" cy="60" r="52" class="maju" data-tr="cincin"></circle></svg></div>',
+      tips: tips.length ? '<div class="tr-tips"><small>' + ik('info') + ' Tips mengerjakan</small><p data-tr="tip">' + esc(tips[0]) + '</p></div>' : '',
+      polos: '<div class="tr-titik" aria-hidden="true"><i></i><i></i><i></i></div>'
+    }[gaya] || '';
+    return '<div class="transisi gaya-' + esc(gaya) + '" role="region" aria-live="polite" aria-label="Pergantian subtes"><div class="tr-kartu">' +
+      '<div class="tr-atas"><div class="logo">' + App.logo() + '</div><div><b>' + esc(App.info.NAMA_APP) + '</b><span>' + esc(o.judul || '') + '</span></div>' + (o.preview ? lencana(o.demo ? 'Demo' : 'Pratinjau', 'warn') : '') + '</div>' +
+      '<ol class="tr-langkah">' + R.map((x, j) => '<li class="' + (j < i ? 'lewat' : j === i ? 'kini' : '') + '"><span>' + (j < i ? '✓' : j + 1) + '</span>' + esc(x.label) + '</li>').join('') + '</ol>' +
+      (prev ? '<div class="tr-selesai">' + ik('cek') + '<span>Subtes <b>' + esc(prev.label) + '</b> selesai dan tersimpan.</span></div>' : '') +
+      '<h1>Berikutnya: ' + esc(f.label || '') + '</h1><p class="tr-info">' + (f.n || 0) + ' soal · ' + (f.d || 0) + ' menit' + (f.k === 'utama' ? ' · nilai dihitung dari subtes ini' : ' · tidak dinilai') + '</p>' +
+      (pesan ? '<p class="tr-pesan">' + esc(pesan) + '</p>' : '') + anim +
+      '<div class="tr-hitung"><small data-tr="lab">Subtes berikutnya dimulai dalam</small><b data-tr="detik">' + fmt.jam(o.sisa || 0) + '</b></div>' +
+      '<button type="button" class="btn utama tr-mulai" data-cbt="mulaiFase" data-tr="mulai" disabled>' + ik('jam') + 'Menunggu…</button>' +
+      (o.preview ? '<div style="margin-top:10px"><button type="button" class="btn kecil" data-cbt="lewatiJeda">Lewati jeda (' + (o.demo ? 'demo' : 'pratinjau') + ')</button></div>' : '') +
+      '<p class="kecil tr-catatan">Jangan menutup halaman ini. Kamu tidak perlu masuk ulang.</p></div></div>';
+  }
+  /** Perbarui hitung mundur & animasi. Dipanggil berkala selama layar transisi tampil. */
+  function tikTransisiDi(root, st, otomatis, mulai) {
+    const sisa = Math.max(0, Math.ceil((st.akhir - performance.now()) / 1000)), q = (k) => root.querySelector('[data-tr="' + k + '"]');
+    const lewat = performance.now() - st.awal;
+    if (q('detik')) q('detik').textContent = fmt.jam(sisa);
+    if (q('cincin')) q('cincin').style.strokeDashoffset = String(Math.round(326.7 * (1 - (st.total ? Math.min(1, sisa / st.total) : 0))));
+    if (q('napas')) q('napas').textContent = Math.floor(lewat / 4000) % 2 ? 'Hembuskan perlahan…' : 'Tarik napas perlahan…';
+    const tips = st.tips || [];
+    if (q('tip') && tips.length > 1) { const t = tips[Math.floor(lewat / 6000) % tips.length]; if (q('tip').textContent !== t) q('tip').textContent = t; }
+    const btn = q('mulai');
+    if (!btn || st.memulai) return sisa;
+    if (sisa > 0) { btn.disabled = true; btn.innerHTML = ik('jam') + (otomatis ? 'Dimulai otomatis setelah hitungan selesai' : 'Tombol Mulai aktif setelah hitungan selesai'); }
+    else {
+      if (q('lab')) q('lab').textContent = otomatis ? 'Memulai subtes…' : 'Silakan mulai';
+      if (otomatis && !st.berhenti) mulai();
+      else if (btn.disabled) { btn.disabled = false; btn.innerHTML = ik('kanan') + 'Mulai ' + esc(st.label || 'subtes'); btn.focus(); }
+    }
+    return sisa;
+  }
+  function tampilTransisi(sisa) {
+    const s = CBT.s;
+    sisa = Math.max(0, Math.round(sisa || 0));
+    s.posisi = 'transisi'; s.idx = 0; s.memulai = false;
+    const f = (s.rencana || [])[s.fase.i] || {};
+    s.tr = { akhir: performance.now() + sisa * 1000, awal: performance.now(), total: Math.max(1, sisa), tips: (s.transisi || {}).tips || [], label: f.label, berhenti: false, memulai: false };
+    $$('.lapis').forEach((x) => { if (x.querySelector('.panel-soal')) x.remove(); });
+    s.el.innerHTML = transisiHtml({ rencana: s.rencana, i: s.fase.i, transisi: s.transisi, judul: s.paketAsli ? s.paketAsli.nama : s.paket.nama, preview: s.preview, sisa });
+    clearInterval(s.tikT);
+    const tik = () => { if (CBT.s === s && s.posisi === 'transisi') tikTransisiDi(s.el, s.tr, (s.transisi || {}).mode !== 'manual', mulaiFase); else clearInterval(s.tikT); };
+    s.tikT = setInterval(tik, 500);
+    tik();
+    if (!s.preview) simpanLokal();
+  }
+  /** Waktu tunggu selesai → minta soal subtes berikutnya. Mode otomatis dipanggil sendiri; mode manual lewat tombol. */
+  async function mulaiFase() {
+    const s = CBT.s;
+    if (!s || s.selesai || s.posisi !== 'transisi' || s.tr.memulai) return;
+    s.tr.memulai = true;
+    const btn = s.el.querySelector('[data-tr="mulai"]'), lab = s.el.querySelector('[data-tr="lab"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="putar"></span> Menyiapkan soal…'; }
+    if (s.preview) { aturFase(faseLokal(s.fase.i), null); return; }
+    for (let k = 0; k < 8; k++) {
+      const r = await api('to.mulaiFase', { sid: s.sid, perangkat: App.perangkat() }, { coba: 1 });
+      if (CBT.s !== s || s.posisi !== 'transisi') return;
+      if (r.success) {
+        if (r.data.selesai) return tampilHasil(r.data.hasil);
+        return aturFase(r.data, Store.get('cbt:' + s.sid, null));
+      }
+      if (r.code === 'TUNGGU') { s.tr.akhir = performance.now() + Math.max(1, r.sisaTunggu || 3) * 1000; s.tr.memulai = false; return; }
+      if (r.code === 'PERANGKAT' || r.code === 'SESI') { lepasCbt(); toast(r.message, 'err', 9000); go('#/siswa'); return; }
+      if (!r.offline) { toast(r.message, 'err', 8000); break; }
+      if (lab) lab.textContent = 'Koneksi terputus. Mencoba lagi (' + (k + 1) + '/8)…';
+      await sleep(3000);
+    }
+    s.tr.memulai = false; s.tr.berhenti = true;
+    if (btn) { btn.disabled = false; btn.innerHTML = ik('segar') + 'Coba lagi'; }
+    if (lab) lab.textContent = 'Belum berhasil memuat subtes berikutnya. Periksa internet lalu tekan Coba lagi.';
+  }
+  /** Akhiri subtes yang sedang dikerjakan (bukan subtes terakhir) → simpan → layar transisi. */
+  async function akhiriFase(alasan) {
+    const s = CBT.s;
+    if (!s || s.selesai || s.mengumpul || s.posisi !== 'soal') return;
+    catatDurasi();
+    if (s.preview) {
+      const i = s.fase.i + 1;
+      s.fase = Object.assign(faseLokal(i).fase, { menunggu: true });
+      return tampilTransisi(s.rencana[i].t || 0);
+    }
+    s.mengumpul = true;
+    simpanLokal();
+    const label = s.fase.label || 'ini';
+    const tunggu = modal({ judul: 'Menyimpan subtes ' + label + '…', tutup: false, isi: '<div class="memuat">Mengirim jawaban subtes ke server. Jangan tutup halaman ini.</div>' });
+    for (let i = 0; i < 6; i++) {
+      const r = await api('to.akhiriFase', { sid: s.sid, jaw: s.j, rg: s.rg, dur: s.d, pt: s.pt, fase: s.fase.i, alasan, perangkat: App.perangkat() }, { coba: 1 });
+      if (r.success) {
+        tunggu.tutup(); s.mengumpul = false; s.kotor = false;
+        if (r.data.selesai) return tampilHasil(r.data.hasil);
+        if (r.data.rencana && r.data.rencana.length) s.rencana = r.data.rencana;
+        if (r.data.transisi) s.transisi = r.data.transisi;
+        s.fase = r.data.fase;
+        if (alasan === 'waktu subtes habis') toast('Waktu subtes ' + label + ' habis. Jawabanmu sudah tersimpan.', 'warn', 7000);
+        return tampilTransisi(r.data.fase.menunggu ? r.data.fase.sisaTunggu : 0);
+      }
+      if (r.code === 'PERANGKAT' || r.code === 'SESI') { tunggu.tutup(); lepasCbt(); toast(r.message, 'err', 9000); go('#/siswa'); return; }
+      if (!r.offline) { tunggu.tutup(); toast(r.message, 'err', 8000); s.mengumpul = false; return; }
+      tunggu.el.querySelector('.modal-isi').innerHTML = '<div class="alert warn">' + ik('awas') + '<div>Koneksi terputus. Jawaban aman di perangkat. Mencoba lagi (' + (i + 1) + '/6)…</div></div>';
+      await sleep(4000);
+    }
+    tunggu.tutup();
+    s.mengumpul = false;
+    toast('Belum berhasil menyimpan subtes. Sambungkan internet lalu tekan Selesai subtes lagi. Jawabanmu tetap aman.', 'err', 10000);
+  }
+  function konfirmasiFase() {
+    const s = CBT.s, h = hitung(), next = (s.rencana || [])[s.fase.i + 1] || {};
+    const m = modal({ judul: 'Akhiri subtes ' + (s.fase.label || ''), ukuran: 'lg', isi:
+      '<div class="ringkas-jawab"><div class="d"><b>' + h.d + '</b>Sudah dijawab</div><div class="r"><b>' + h.r + '</b>Ragu-ragu</div><div class="k"><b>' + h.k + '</b>Kosong' +
+      (h.kosongNo.length ? '<br><span class="mono">No. ' + h.kosongNo.slice(0, 8).join(', ') + '</span>' : '') + '</div></div>' +
+      (h.k ? '<div class="alert warn">' + ik('awas') + '<div>Masih ada ' + h.k + ' soal kosong di subtes ini.</div></div>' : '') +
+      '<p style="margin:0 0 12px">Subtes berikutnya: <b>' + esc(next.label || '') + '</b> (' + (next.n || 0) + ' soal, ' + (next.d || 0) + ' menit). Setelah subtes ini diakhiri, kamu <b>tidak dapat kembali</b> ke soal-soalnya.</p>',
+      tombol: [{ label: ik('kiri') + 'Periksa lagi' }, { label: ik('kanan') + 'Akhiri & lanjut', kelas: 'utama', nilai: true }] });
+    m.hasil.then((v) => { if (v) akhiriFase('selesai subtes'); });
+  }
+  /** Demo layar transisi untuk Pengaturan admin (tanpa sesi ujian). cfg: {transisi, rencana, detik} */
+  CBT.demoTransisi = function (cfg) {
+    const lapis = document.createElement('div');
+    lapis.className = 'demo-transisi';
+    const R = cfg.rencana, st = { akhir: performance.now() + (cfg.detik || 10) * 1000, awal: performance.now(), total: cfg.detik || 10, tips: (cfg.transisi || {}).tips || [], label: (R[1] || {}).label };
+    lapis.innerHTML = transisiHtml({ rencana: R, i: 1, transisi: cfg.transisi, judul: 'Contoh paket', preview: true, demo: true, sisa: cfg.detik || 10 }) + '<button type="button" class="btn demo-tutup">' + ik('x') + 'Tutup demo</button>';
+    document.body.appendChild(lapis);
+    const tutup = () => { clearInterval(t); lapis.remove(); };
+    const tik = () => tikTransisiDi(lapis, st, (cfg.transisi || {}).mode !== 'manual', () => { st.memulai = true; const b = lapis.querySelector('[data-tr="mulai"]'); if (b) b.innerHTML = ik('cek') + 'Di ujian sungguhan, soal subtes dimulai sekarang'; });
+    const t = setInterval(tik, 500);
+    tik();
+    lapis.addEventListener('click', (e) => {
+      if (e.target.closest('.demo-tutup')) tutup();
+      if (e.target.closest('[data-cbt="lewatiJeda"]')) st.akhir = performance.now();
+      if (e.target.closest('[data-cbt="mulaiFase"]')) { st.memulai = true; e.target.closest('button').innerHTML = ik('cek') + 'Di ujian sungguhan, soal subtes dimulai sekarang'; }
+    });
   };
   function cbtHtml() {
     const s = CBT.s, me = App.me || { nama: 'Pratinjau', nis: '—' };
     return '<div class="cbt"><header class="cbt-kepala"><div class="logo">' + App.logo() + '</div><div class="judul"><b>' + esc(App.info.NAMA_APP) + '</b><span>' + esc(App.info.NAMA_SEKOLAH) + ' · ' + esc(s.paket.nama) + '</span></div>' +
       '<div class="peserta"><b>' + esc(s.preview ? 'Pratinjau guru' : me.nama) + '</b><span class="mono">NIS ' + esc(s.preview ? '—' : me.nis) + '</span></div></header>' +
-      '<div class="cbt-bilah"><span class="no-soal">Soal <b id="cbt-no">1</b> / ' + s.soal.length + '</span><span class="jenis" id="cbt-jenis"></span><span class="spasi"></span>' +
+      '<div class="cbt-bilah">' + (s.rencana && s.rencana.length > 1 ? '<span class="fase-chip fase-' + esc(s.fase.k) + '" title="Subtes ' + s.fase.nomor + ' dari ' + s.fase.total + '"><small>Subtes ' + s.fase.nomor + '/' + s.fase.total + '</small><b>' + esc(s.fase.label) + '</b></span>' : '') +
+      '<span class="no-soal">Soal <b id="cbt-no">1</b> / ' + s.soal.length + '</span><span class="jenis" id="cbt-jenis"></span><span class="spasi"></span>' +
       '<div class="ukuran" role="group" aria-label="Ukuran huruf">' + [14, 16, 20].map((f, i) => '<button data-font="' + f + '" style="font-size:' + (12 + i * 2) + 'px" aria-label="Huruf ' + f + ' piksel">A</button>').join('') + '</div>' +
       '<span class="simpan-info" id="cbt-simpan">' + ik('cek') + (s.preview ? 'Mode pratinjau' : 'Tersimpan di perangkat') + '</span>' +
       '<span class="catatan-waktu" id="cbt-catatan" role="status" hidden></span>' +
@@ -219,15 +413,16 @@
       const a = b.dataset.cbt;
       if (a === 'prev') pindah(s.idx - 1);
       else if (a === 'next') pindah(s.idx + 1);
-      else if (a === 'selesai') s.preview ? hasilPratinjau() : konfirmasiSelesai();
+      else if (a === 'selesai') { if (!terakhirFase()) konfirmasiFase(); else if (s.preview) hasilPratinjau(); else konfirmasiSelesai(); }
+      else if (a === 'mulaiFase') { if (s.tr) s.tr.berhenti = false; mulaiFase(); }
+      else if (a === 'lewatiJeda') { if (s.tr) s.tr.akhir = performance.now(); }
       else if (a === 'keluar') tutupPratinjau();
       else if (a === 'ragu') { const id = s.soal[s.idx].id; s.rg[id] = !s.rg[id]; ubah(); $('#cbt-ragu').checked = !!s.rg[id]; }
       else if (a === 'daftar') panelSoal();
       else if (a === 'stim') { const st = $('#cbt-stim'); st.classList.toggle('lipat'); b.textContent = st.classList.contains('lipat') ? 'Tampilkan bacaan' : 'Sembunyikan bacaan'; }
     });
-    const tanya = $('#cbt-tanya', el);
-    tanya.addEventListener('change', (e) => tangkap(e.target));
-    tanya.addEventListener('input', debounce((e) => { if (e.target.matches('input[type=text], textarea')) tangkap(e.target); }, 400));
+    el.addEventListener('change', (e) => { if (e.target.closest('#cbt-tanya')) tangkap(e.target); });
+    el.addEventListener('input', debounce((e) => { if (e.target.closest('#cbt-tanya') && e.target.matches('input[type=text], textarea')) tangkap(e.target); }, 400));
     if (!s.preview) {
       s.pantau = () => {
         if (document.visibilityState === 'hidden') { catatPindah('berpindah aplikasi/tab'); s.pergi = true; }
@@ -245,18 +440,18 @@
       document.addEventListener('copy', s.ctx);
     }
   }
-  function lepasCbt() {
+  function lepasCbt(keluarLayar) {
     const s = CBT.s;
     if (!s) return;
-    clearInterval(s.tik); clearInterval(s.sinkron);
+    clearInterval(s.tik); clearInterval(s.sinkron); clearInterval(s.tikT);
     document.removeEventListener('visibilitychange', s.pantau); window.removeEventListener('blur', s.blur);
     document.removeEventListener('fullscreenchange', s.layar); window.removeEventListener('pagehide', s.kirimAkhir);
     window.removeEventListener('online', s.online); document.removeEventListener('contextmenu', s.ctx); document.removeEventListener('copy', s.ctx);
-    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { });
+    if (keluarLayar !== false && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { });
   }
   function terapFont() { $('#cbt-tubuh').style.setProperty('--fs', CBT.s.font + 'px'); $$('[data-font]').forEach((b) => b.classList.toggle('aktif', +b.dataset.font === CBT.s.font)); }
 
-  function catatDurasi() { const s = CBT.s, id = s.soal[s.idx] && s.soal[s.idx].id; if (!id) return; s.d[id] = Math.round((s.d[id] || 0) + (Date.now() - s.tMasuk) / 1000); s.tMasuk = Date.now(); }
+  function catatDurasi() { const s = CBT.s, id = s.posisi === 'soal' && s.soal[s.idx] && s.soal[s.idx].id; if (!id) return; s.d[id] = Math.round((s.d[id] || 0) + (Date.now() - s.tMasuk) / 1000); s.tMasuk = Date.now(); }
   function pindah(i) {
     const s = CBT.s;
     if (i < 0 || i >= s.soal.length) return;
@@ -285,16 +480,17 @@
     $('[data-cbt=prev]').disabled = i === 0;
     const kanan = $('.cbt-kaki .kanan');
     kanan.innerHTML = i === s.soal.length - 1
-      ? '<button class="btn selesai-btn" data-cbt="selesai">' + ik('cek') + (s.preview ? 'Selesai & lihat hasil' : 'Selesai') + '</button>'
+      ? '<button class="btn selesai-btn" data-cbt="selesai">' + ik('cek') + (!terakhirFase() ? 'Selesai subtes' : s.preview ? 'Selesai & lihat hasil' : 'Selesai') + '</button>'
       : '<button class="btn berikut" data-cbt="next"><span class="label-panjang">Soal berikutnya</span>' + ik('kanan') + '</button>';
     terapFont();
   }
   function jawabHtml(q, v) {
     const nama = 'j_' + q.id;
-    if (q.b === 'PG' || q.b === 'PGK_MCMA') {
+    const survei = q.g === 'survei' ? '<div class="petunjuk-bentuk survei">' + ik('info') + 'Pilih yang paling sesuai dengan keadaanmu. Tidak ada jawaban benar atau salah.</div>' : '';
+    if (q.b === 'PG' || q.b === 'PGK_MCMA' || q.b === 'SKALA') {
       const multi = q.b === 'PGK_MCMA', pilih = [].concat(v || []);
-      return (multi ? '<div class="petunjuk-bentuk">' + ik('info') + 'Jawaban benar lebih dari satu. Centang semua yang benar.</div>' : '') +
-        '<div class="pilihan">' + (q.o || []).map((o, i) => '<label><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + nama + '" value="' + esc(o.k) + '"' + (pilih.indexOf(o.k) >= 0 ? ' checked' : '') + '>' +
+      return survei + (multi && !survei ? '<div class="petunjuk-bentuk">' + ik('info') + 'Jawaban benar lebih dari satu. Centang semua yang benar.</div>' : '') +
+        '<div class="pilihan' + (q.b === 'SKALA' ? ' skala' : '') + '">' + (q.o || []).map((o, i) => '<label><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + nama + '" value="' + esc(o.k) + '"' + (pilih.indexOf(o.k) >= 0 ? ' checked' : '') + '>' +
           '<span class="hrf">' + HURUF[i] + '</span><div class="isi-soal isi-opsi" data-t="' + esc(o.t) + '"></div></label>').join('') + '</div>';
     }
     if (q.b === 'PGK_KATEGORI') {
@@ -317,7 +513,7 @@
   function tangkap(t) {
     const s = CBT.s, q = s.soal[s.idx];
     if (!q) return;
-    if (q.b === 'PG') s.j[q.id] = t.value;
+    if (q.b === 'PG' || q.b === 'SKALA') s.j[q.id] = t.value;
     else if (q.b === 'PGK_MCMA') s.j[q.id] = $$('#cbt-tanya input[type=checkbox]:checked').map((x) => x.value);
     else if (q.b === 'PGK_KATEGORI') { const arr = Array.isArray(s.j[q.id]) ? s.j[q.id].slice() : []; arr[+t.dataset.kat] = t.value; for (let i = 0; i < arr.length; i++) if (arr[i] === undefined) arr[i] = null; s.j[q.id] = arr; }
     else if (q.b === 'JODOH') { const m = Object.assign({}, s.j[q.id]); m[t.dataset.jodoh] = t.value; s.j[q.id] = m; }
@@ -325,7 +521,7 @@
     ubah();
   }
   function ubah() { const s = CBT.s; if (s.preview) return; s.kotor = true; simpanLokal(); kirimNanti(); }
-  function simpanLokal() { const s = CBT.s; Store.set('cbt:' + s.sid, { j: s.j, rg: s.rg, d: s.d, pt: s.pt, idx: s.idx, t: Date.now() }); infoSimpan('lokal'); }
+  function simpanLokal() { const s = CBT.s; Store.set('cbt:' + s.sid, { j: s.j, rg: s.rg, d: s.d, pt: s.pt, idx: s.idx, fi: s.fase.i, t: Date.now() }); infoSimpan('lokal'); }
   const kirimNanti = debounce(() => { if (CBT.s && CBT.s.kotor) kirim(); }, 2500);
   function infoSimpan(st) {
     const el = $('#cbt-simpan');
@@ -334,7 +530,10 @@
     el.innerHTML = st === 'server' ? ik('cek') + 'Tersinkron ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : st === 'gagal' ? ik('awas') + 'Offline — jawaban aman di perangkat' : ik('cek') + 'Tersimpan di perangkat';
   }
-  function muatan(paksa) { const s = CBT.s; return { sid: s.sid, jaw: s.j, rg: s.rg, dur: s.d, pt: s.pt, perangkat: App.perangkat(), paksa: !!paksa }; }
+  function muatan(paksa) {
+    const s = CBT.s, h = s.posisi === 'soal' ? hitung() : { d: 0 };
+    return { sid: s.sid, jaw: s.j, rg: s.rg, dur: s.d, pt: s.pt, perangkat: App.perangkat(), paksa: !!paksa, fase: s.fase.i, fk: s.fase.k, nf: h.d, tf: s.posisi === 'soal' ? s.soal.length : 0 };
+  }
   async function kirim(paksa) {
     const s = CBT.s;
     if (!s || s.preview || s.kirim || s.selesai) return;
@@ -349,7 +548,8 @@
     }
     infoSimpan('server');
     if (r.data.selesai) return tampilHasil(r.data.hasil, r.data.alasan);
-    if (typeof r.data.sisa === 'number') s.akhir = performance.now() + r.data.sisa * 1000;
+    if (r.data.faseBerubah) { if (s.posisi === 'soal') akhiriFase('waktu subtes habis'); return; }
+    if (typeof r.data.sisa === 'number' && s.posisi === 'soal') s.akhir = performance.now() + r.data.sisa * 1000;
   }
   function kirimBeacon() {
     const s = CBT.s;
@@ -359,13 +559,14 @@
   }
   function tikWaktu() {
     const s = CBT.s;
-    if (!s || s.selesai) return;
+    if (!s || s.selesai || s.posisi !== 'soal') return;
     const sisa = Math.max(0, Math.round((s.akhir - performance.now()) / 1000));
     const w = $('#cbt-waktu');
     if (!w) return;
     w.querySelector('b').textContent = fmt.jam(sisa);
-    w.classList.toggle('waspada', sisa <= 1800 && sisa > 900);
-    w.classList.toggle('oranye', sisa <= 900 && sisa > 180);
+    const D = ((s.paket && s.paket.durasi) || 0) * 60;              // subtes pendek (mis. latihan 5 mnt) tidak langsung berwarna waspada
+    w.classList.toggle('waspada', sisa <= 1800 && sisa > 900 && D > 1800);
+    w.classList.toggle('oranye', sisa <= 900 && sisa > 180 && D > 900);
     w.classList.toggle('genting', sisa <= 180);
     if (sisa <= 1800 && !s.peringat[1800]) { s.peringat[1800] = 1; catatanWaktu('Sisa 30 menit. Tetap tenang dan lanjutkan.', '', 10000); }
     if (sisa <= 900 && !s.peringat[900]) { s.peringat[900] = 1; catatanWaktu('Sisa 15 menit. Mulai periksa soal yang ragu-ragu.', '', 10000); }
@@ -375,7 +576,7 @@
       catatanWaktu(h.k ? 'Sisa 3 menit · ' + h.k + ' soal masih kosong' : 'Sisa 3 menit · semua soal sudah terisi ✓', h.k ? 'merah' : 'hijau', 0);
       const nb = $('#cbt-nbk'); if (nb) { nb.hidden = !h.k; nb.textContent = h.k; }
     }
-    if (sisa <= 0) kumpulkan('waktu habis');
+    if (sisa <= 0) { if (terakhirFase()) kumpulkan('waktu habis'); else akhiriFase('waktu subtes habis'); }
   }
   /** Penanda waktu kecil di samping jam: tanpa suara, tanpa jendela, hilang sendiri. ms=0 → tetap tampil. */
   function catatanWaktu(teks, jenis, ms) {
@@ -449,10 +650,12 @@
     const s = CBT.s;
     catatDurasi();
     const tunggu = modal({ judul: 'Menghitung hasil pratinjau…', tutup: false, isi: '<div class="memuat">Menilai jawaban percobaan di server…</div>' });
-    const r = await api('paket.nilaiPratinjau', { id: s.paket.id, jaw: s.j, durasi: Math.round((Date.now() - s.tMulai) / 1000) });
+    const r = await api('paket.nilaiPratinjau', { id: (s.paketAsli || s.paket).id, jaw: s.j, durasi: Math.round((Date.now() - s.tMulai) / 1000) });
     tunggu.tutup();
     if (!r.success) return toast(r.message, 'err');
-    const m = modal({ judul: 'Hasil pratinjau — ' + s.paket.nama, ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">Tampilan ini sama dengan yang dilihat siswa setelah mengumpulkan. Jawaban pratinjau tidak disimpan.</p>' + Siswa.hasilHtml(r.data),
+    const banding = s.hasilSet.banding !== false ? '<section class="kartu banding" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Perbandingan dengan try out sebelumnya</h2><p>Di akun siswa, tabel ini terisi otomatis dari riwayat try out-nya.</p></div></div><p class="kecil muted" style="margin:0">Pratinjau guru tidak memiliki riwayat.</p></section>' : '';
+    const m = modal({ judul: 'Hasil pratinjau — ' + (s.paketAsli || s.paket).nama, ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">Tampilan ini sama dengan yang dilihat siswa setelah mengumpulkan semua subtes. Jawaban pratinjau tidak disimpan.</p>' +
+      (r.data.tanpaUtama ? '<div class="alert warn">' + ik('awas') + '<div>Paket ini belum berisi soal TO utama, jadi tidak ada nilai yang bisa dihitung.</div></div>' : '') + Siswa.hasilHtml(r.data, null, { rencana: s.rencana, hasilSet: s.hasilSet, banding }),
       tombol: [{ label: ik('kiri') + 'Kembali ke soal', nilai: 'soal' }, { label: 'Tutup pratinjau', kelas: 'utama', nilai: 'tutup' }] });
     pasangPeta(m.el, r.data);
     m.hasil.then((v) => { if (v === 'tutup') tutupPratinjau(); });
@@ -496,19 +699,19 @@
         '<small>' + ringkasJawab(q, s.j[q.id]) + '</small></button>').join('') + '</div>' +
       (s.preview ? '' : '<p class="kecil muted" style="margin-top:16px">Ketuk nomor untuk membuka soal.</p>') + '</div>' +
       '<div style="padding:14px 18px;border-top:1px solid var(--line);display:grid;gap:8px">' + (h.raguNo.length ? '<button class="btn ragu" data-ke="' + (h.raguNo[0] - 1) + '">Ke soal ragu (No. ' + h.raguNo[0] + ')</button>' : '') +
-      '<button class="btn utama" data-tutup>Lanjut mengerjakan</button>' + (s.preview ? '' : '<button class="btn" data-akhiri>' + ik('cek') + 'Kumpulkan & selesai</button>') + '</div></aside>';
+      '<button class="btn utama" data-tutup>Lanjut mengerjakan</button>' + (s.preview ? '' : '<button class="btn" data-akhiri>' + ik('cek') + (terakhirFase() ? 'Kumpulkan & selesai' : 'Akhiri subtes ini') + '</button>') + '</div></aside>';
     document.body.appendChild(lapis);
     lapis.addEventListener('click', (e) => {
       const n = e.target.closest('[data-no]'), k = e.target.closest('[data-ke]');
       if (n) { lapis.remove(); pindah(+n.dataset.no); return; }
       if (k) { lapis.remove(); pindah(+k.dataset.ke); return; }
-      if (e.target.closest('[data-akhiri]')) { lapis.remove(); konfirmasiSelesai(); return; }
+      if (e.target.closest('[data-akhiri]')) { lapis.remove(); if (terakhirFase()) konfirmasiSelesai(); else konfirmasiFase(); return; }
       if (e.target === lapis || e.target.closest('[data-tutup]')) lapis.remove();
     });
   }
   function ringkasJawab(q, v) {
     if (v == null || v === '') return '–';
-    if (q.b === 'PG') { const i = (q.o || []).findIndex((o) => o.k === v); return i >= 0 ? HURUF[i] : '•'; }
+    if (q.b === 'PG' || q.b === 'SKALA') { const i = (q.o || []).findIndex((o) => o.k === v); return i >= 0 ? HURUF[i] : '•'; }
     if (q.b === 'PGK_MCMA') return [].concat(v).map((k) => HURUF[(q.o || []).findIndex((o) => o.k === k)]).filter(Boolean).join(',') || '–';
     return '✓';
   }
@@ -547,12 +750,14 @@
     App.data.ujian = null;
     App.data.hasil = App.data.hasil || {};
     App.data.hasil[s.sid] = hasil;
+    App.data.hasilBaru = s.sid;
+    (App.data.rencana = App.data.rencana || {})[s.sid] = s.rencana;
     basi('sboot');
     if (alasan) toast(alasan, 'warn', 9000);
     go('#/siswa/hasil/' + s.sid);
     Router.buang('ujian');
   }
-  function tutupPratinjau() { lepasCbt(); Router.buang('ujian'); document.body.className = 'mode-admin'; if (CBT.s && CBT.s.kembali) go(CBT.s.kembali); CBT.s = null; }
+  function tutupPratinjau() { lepasCbt(); $$('.lapis').forEach((x) => { if (x.querySelector('.panel-soal')) x.remove(); }); Router.buang('ujian'); document.body.className = 'mode-admin'; if (CBT.s && CBT.s.kembali) go(CBT.s.kembali); CBT.s = null; }
   CBT.pratinjau = function (data, kembali) { CBT.mulai(Object.assign({ sid: 'pratinjau', sisa: 0 }, data), { preview: true }); CBT.s.kembali = kembali; };
 
   // ------------------------------------------------------------ HASIL & PETA BELAJAR
@@ -570,17 +775,93 @@
         bar(s.persen, s.kuasai ? 'ok' : 'bad') + '<span class="nil" style="color:' + (s.kuasai ? 'var(--ok)' : 'var(--bad)') + '">' + s.persen + '%</span></div>').join('')
         : (k.kuasai ? '' : '<div class="kecil" style="margin-top:6px">Pelajari kembali materi kompetensi ini secara menyeluruh.</div>')) + '</div>').join('');
   };
-  /** Kartu hasil lengkap: nilai, ringkasan, fokus belajar, tombol penjelasan. */
-  Siswa.hasilHtml = function (h, judul) {
-    const lemah = lemahSub(h.peta);
-    return '<section class="kartu hasil-besar">' + (judul ? '<p class="muted" style="margin:0 0 8px">' + esc(judul) + '</p>' : '') + '<div class="skor">' + fmt.angka(h.nilai) + '<small> / 100</small></div>' +
+  /**
+   * Kartu hasil lengkap: nilai (TO utama saja), ringkasan, kelebihan & kekurangan, fokus belajar, tabel pembanding.
+   * x: {rencana, hasilSet{pesan}, animasi, banding(html)}
+   */
+  Siswa.hasilHtml = function (h, judul, x) {
+    x = x || {};
+    const lemah = lemahSub(h.peta), R = x.rencana || [], multi = R.length > 1, utama = R.find((f) => f.k === 'utama'), lain = R.filter((f) => f.k !== 'utama');
+    const pesan = (x.hasilSet || {}).pesan;
+    return (pesan ? '<div class="hasil-pesan">' + ik('info') + '<p>' + esc(pesan) + '</p></div>' : '') +
+      '<section class="kartu hasil-besar' + (x.animasi ? ' anim-' + esc(x.animasi) : '') + '">' + (judul ? '<p class="muted" style="margin:0 0 8px">' + esc(judul) + '</p>' : '') +
+      (multi && utama ? '<p class="lbl" style="margin:0 0 6px">Nilai ' + esc(utama.label) + '</p>' : '') +
+      '<div class="skor"><span data-hitung="' + Number(h.nilai || 0) + '">' + fmt.angka(h.nilai) + '</span><small> / 100</small></div>' +
       '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px">' + lencana(h.benar + ' benar', 'ok') + lencana(h.salah + ' salah', 'bad') + lencana(h.kosong + ' kosong', 'polos') +
       (h.durasi ? lencana('Durasi ' + fmt.durasi(h.durasi), 'info') : '') + (h.perluDinilai ? lencana(h.perluDinilai + ' uraian dinilai guru', 'warn') : '') + '</div>' +
+      (multi && utama && lain.length ? '<p class="kecil muted" style="margin:12px 0 0">Nilai hanya dihitung dari subtes ' + esc(utama.label) + '. ' + lain.map((f) => esc(f.label)).join(' dan ') + ' tidak dinilai.</p>' : '') +
       (lemah.length ? '<div class="fokus-belajar"><b>' + ik('bendera') + ' Fokus belajarmu:</b> ' + lemah.slice(0, 3).map((x) => esc(x.nama) + ' (' + x.persen + '%)').join(', ') + (lemah.length > 3 ? ', dan ' + (lemah.length - 3) + ' lainnya' : '') + '.</div>'
         : (h.peta && h.peta.length ? '<div class="fokus-belajar" style="background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line)">' + ik('cek') + ' Semua kompetensi sudah mencapai batas tuntas. Pertahankan!</div>' : '')) +
       '<button class="btn utama" data-peta style="margin-top:16px">' + ik('cari') + 'Lihat yang perlu dipelajari</button></section>' +
-      '<section class="kisi k2" style="margin-top:16px">' + kompKartu(h.dikuasai || [], h.belajar || []) + '</section>';
+      kelebihanKekurangan(h) + (x.banding || '');
   };
+  /** Kelebihan (sudah dikuasai) & kekurangan (perlu ditingkatkan) sampai tingkat sub kompetensi. */
+  function kelebihanKekurangan(h) {
+    const peta = h.peta || [];
+    if (!peta.length) return '<section class="kisi k2" style="margin-top:16px">' + kompKartu(h.dikuasai || [], h.belajar || []) + '</section>';
+    const kuat = [], lemah = [];
+    peta.forEach((k) => {
+      if (k.sub && k.sub.length) k.sub.forEach((sb) => (sb.kuasai ? kuat : lemah).push({ nama: sb.nama, induk: k.nama, persen: sb.persen, soal: sb.soal, benar: sb.benar }));
+      else (k.kuasai ? kuat : lemah).push({ nama: k.nama, induk: '', persen: k.persen, soal: k.soal, benar: k.benar });
+    });
+    kuat.sort((a, b) => b.persen - a.persen); lemah.sort((a, b) => a.persen - b.persen);
+    const item = (x) => '<li><div><b>' + esc(x.nama) + '</b>' + (x.induk ? '<small>' + esc(x.induk) + '</small>' : '') + '</div><span class="nil">' + x.persen + '%' +
+      (x.soal != null ? '<small>' + x.benar + ' dari ' + x.soal + ' benar</small>' : '') + '</span></li>';
+    return '<section class="kisi k2 kk" style="margin-top:16px"><div class="kartu kk-kuat"><h3>' + ik('cek') + 'Kelebihanmu</h3><p class="kecil muted">Bagian yang sudah kamu kuasai' + (h.ambang ? ' (≥ ' + h.ambang + '%)' : '') + '.</p>' +
+      (kuat.length ? '<ul>' + kuat.map(item).join('') + '</ul>' : '<p class="muted kecil">Belum ada bagian yang mencapai batas tuntas. Tetap semangat!</p>') + '</div>' +
+      '<div class="kartu kk-lemah"><h3>' + ik('bendera') + 'Yang perlu ditingkatkan</h3><p class="kecil muted">Urut dari yang paling perlu dipelajari.</p>' +
+      (lemah.length ? '<ul>' + lemah.map(item).join('') + '</ul>' : '<p class="muted kecil">Semua bagian sudah dikuasai. Pertahankan!</p>') + '</div></section>';
+  }
+  /** Tabel pembanding otomatis dari riwayat siswa: nilai per TO + perubahan per kompetensi dibanding TO sebelumnya (mapel sama). */
+  Siswa.bandingHtml = function (riwayat, sid) {
+    const waktu = (r) => new Date(r.selesai).getTime() || 0;
+    const list = (riwayat || []).slice().sort((a, b) => waktu(a) - waktu(b));
+    const ini = list.find((r) => r.sid === sid);
+    if (!ini) return '';
+    const sebelum = list.filter((r) => r.sid !== sid && waktu(r) <= waktu(ini));
+    const sebelumnya = (r) => { for (let j = list.indexOf(r) - 1; j >= 0; j--) if (list[j].mapel === r.mapel) return list[j]; return null; };
+    const selisih = (a, b) => {
+      if (a == null || b == null) return '<span class="muted">—</span>';
+      const d = Math.round((a - b) * 10) / 10;
+      return d > 0 ? '<span class="naik">▲ ' + fmt.angka(d) + '</span>' : d < 0 ? '<span class="turun">▼ ' + fmt.angka(-d) + '</span>' : '<span class="muted">tetap</span>';
+    };
+    let html = '<section class="kartu banding" style="margin-top:16px"><div class="kartu-kepala"><div><h2>Perbandingan dengan try out sebelumnya</h2><p>Tampil otomatis dari riwayat try out-mu.</p></div></div>' +
+      (sebelum.length ? '' : '<p class="kecil muted" style="margin:0 0 10px">Ini try out pertamamu. Tabel ini akan terisi otomatis setelah kamu mengikuti try out berikutnya.</p>') +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Try out</th><th>Tanggal</th><th class="angka">Nilai</th><th class="angka">Benar</th><th class="angka">Perubahan</th></tr></thead><tbody>' +
+      sebelum.slice(-7).concat([ini]).map((r) => {
+        const p = sebelumnya(r);
+        return '<tr class="' + (r.sid === sid ? 'kini' : '') + '"><td><b>' + esc(r.nama) + '</b>' + (r.sid === sid ? ' ' + lencana('Sekarang', 'navy') : '') + '<div class="kecil muted">' + esc(r.mapel) + '</div></td>' +
+          '<td class="kecil">' + fmt.tgl(r.selesai, false) + '</td><td class="angka"><b>' + (r.nilai == null ? '—' : fmt.angka(r.nilai)) + '</b></td>' +
+          '<td class="angka mono">' + (r.benar == null ? '—' : r.benar) + '/' + (r.jumlah || 0) + '</td><td class="angka">' + selisih(r.nilai, p && p.nilai) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    const p = sebelumnya(ini);
+    if (p && (ini.komp || []).length) {
+      const lama = {};
+      (p.komp || []).forEach((k) => { lama[k.id] = k; });
+      html += '<h3 style="margin:18px 0 8px;font-size:15px">Per kompetensi: ' + esc(p.nama) + ' → ' + esc(ini.nama) + '</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Kompetensi</th><th class="angka">Sebelumnya</th><th class="angka">Sekarang</th><th class="angka">Perubahan</th></tr></thead><tbody>' +
+        ini.komp.slice().sort((a, b) => a.persen - b.persen).map((k) => { const l = lama[k.id];
+          return '<tr><td>' + esc(k.nama) + '</td><td class="angka">' + (l ? l.persen + '%' : '<span class="muted">—</span>') + '</td><td class="angka"><b>' + k.persen + '%</b></td><td class="angka">' + selisih(k.persen, l && l.persen) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    }
+    return html + '</section>';
+  };
+  /** Animasi saat hasil pertama kali tampil: perayaan (konfeti + hitung naik), naik (hitung naik saja), tanpa. */
+  function animasiHasil(root, gaya) {
+    if (!gaya || gaya === 'tanpa' || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const el = root.querySelector('[data-hitung]');
+    if (el) {
+      const target = Number(el.dataset.hitung) || 0, t0 = performance.now(), lama = 1300;
+      const langkah = (t) => { const p = Math.min(1, (t - t0) / lama), e = 1 - Math.pow(1 - p, 3); el.textContent = fmt.angka(target * e); if (p < 1) requestAnimationFrame(langkah); else el.textContent = fmt.angka(target); };
+      requestAnimationFrame(langkah);
+    }
+    if (gaya !== 'perayaan') return;
+    const box = document.createElement('div');
+    box.className = 'konfeti';
+    box.setAttribute('aria-hidden', 'true');
+    const warna = ['#1E3A8A', '#2563EB', '#059669', '#F59E0B', '#DC2626', '#0284C7', '#FFC107'];
+    box.innerHTML = Array.from({ length: 70 }, (_, i) => '<i style="left:' + (Math.random() * 100).toFixed(1) + '%;background:' + warna[i % warna.length] + ';animation-delay:' + (Math.random() * 0.8).toFixed(2) + 's;animation-duration:' + (2.2 + Math.random() * 1.6).toFixed(2) + 's;transform:rotate(' + Math.round(Math.random() * 360) + 'deg)"></i>').join('');
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 4800);
+  }
   function pasangPeta(root, h) {
     root.addEventListener('click', (e) => {
       if (!e.target.closest('[data-peta]')) return;
@@ -602,11 +883,16 @@
       isi.innerHTML = '<section class="kartu hasil-besar"><div style="color:var(--ok)">' + ik('cek') + '</div><h1 style="color:var(--navy-3)">Jawaban terkumpul</h1><p class="muted">Terima kasih. Nilai akan diumumkan oleh guru.</p><a class="btn utama" href="#/siswa">Kembali ke beranda</a></section>';
       return;
     }
-    isi.innerHTML = Siswa.hasilHtml(h, r ? r.nama : 'Hasil try out') +
+    const baru = App.data.hasilBaru === sid, hs = b.hasilSet || {};
+    App.data.hasilBaru = null;
+    const pk = r ? (b.paket || []).find((p) => p.id === r.paket) : null;
+    const rencana = (App.data.rencana && App.data.rencana[sid]) || (pk && pk.sub) || null;
+    if (!h.ambang) h.ambang = b.ambang;
+    isi.innerHTML = Siswa.hasilHtml(h, r ? r.nama : 'Hasil try out', { rencana, hasilSet: hs, animasi: baru ? hs.animasi : '', banding: hs.banding !== false ? Siswa.bandingHtml(b.riwayat, sid) : '' }) +
       '<div style="display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap"><a class="btn utama" href="#/siswa">' + ik('kiri') + 'Kembali ke beranda</a>' +
       (r && r.pembahasan ? '<a class="btn" href="#/siswa/pembahasan/' + esc(sid) + '">Lihat pembahasan</a>' : '') + '</div>';
-    if (!h.ambang) h.ambang = b.ambang;
     isi._h = h;
+    if (baru) animasiHasil(isi, hs.animasi);
     if (!isi.dataset.peta) { isi.dataset.peta = '1'; pasangPeta(isi, { get peta() { return isi._h.peta; }, get ambang() { return isi._h.ambang; } }); }
   };
 

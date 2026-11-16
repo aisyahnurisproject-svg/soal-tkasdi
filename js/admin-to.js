@@ -19,29 +19,49 @@
     }
   });
   function jadwal(p) { return p.buka ? fmt.tgl(p.buka) + (p.tutup ? ' – ' + fmt.tgl(p.tutup) : '') : 'Kapan saja saat aktif'; }
+  const BAGIAN = ['latihan', 'utama', 'survei'];
+  const bagOf = (x) => x.bagian || 'utama';
+  /** Alur subtes ringkas: Latihan 5' → TO Utama 75' → Survei 25' */
+  const alurMini = (R) => (R && R.length ? '<span class="alur-mini">' + R.map((f) => '<span class="' + (f.k === 'utama' ? 'utama' : '') + '">' + esc(f.label) + ' ' + f.d + '′</span>').join('→') + '</span>' : '');
   function daftarPaket(el) {
     const d = el.paket || [], sa = Admin.sa();
     $('#pk-daftar', el).innerHTML = Admin.kepala('Paket ujian & try out', 'Susun soal, atur jadwal dan token, lalu aktifkan untuk siswa.', sa ? '<button class="btn utama" data-pk="baru">' + ik('tambah') + 'Buat paket</button>' : '') +
-      (d.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Kode &amp; nama</th><th>Mapel / kelas</th><th>Komposisi</th><th>Durasi &amp; jadwal</th>' + (sa ? '<th>Token</th>' : '') + '<th>Peserta</th><th>Status</th></tr></thead><tbody>' +
+      (d.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Kode &amp; nama</th><th>Mapel / kelas</th><th>Komposisi</th><th>Durasi &amp; jadwal</th>' + (sa ? '<th>Token</th>' : '') + '<th>Peserta</th><th>Status</th><th></th></tr></thead><tbody>' +
         d.map((p) => '<tr class="klik" data-buka="' + esc(p.id) + '"><td><span class="chip-id">' + esc(p.id) + '</span><div><b>' + esc(p.nama) + '</b></div></td><td>' + esc(p.mapel) + '<div class="kecil muted">' + esc(p.kelas.join(', ') || 'Semua kelas') + '</div></td>' +
-          '<td><b>' + p.jumlah + '</b> butir<div class="kecil muted">' + Object.keys(p.bentuk).map((b) => esc((BENTUK_LABEL[b] || b).replace('Pilihan ganda kompleks', 'PGK').replace('Pilihan ganda', 'PG')) + ' ' + p.bentuk[b]).join(' · ') + '</div></td>' +
-          '<td>' + p.durasi + ' menit<div class="kecil muted">' + jadwal(p) + '</div></td>' + (sa ? '<td class="mono"><b>' + esc(p.tokenInfo ? p.tokenInfo.token : '') + '</b>' + (p.rotasi ? '<div class="kecil muted">rotasi ' + p.rotasi + ' mnt</div>' : '') + '</td>' : '') +
-          '<td class="kecil">' + p.sesi.selesai + ' selesai<br>' + p.sesi.mulai + ' berjalan</td><td>' + Admin.status(p.status) + '</td></tr>').join('') + '</tbody></table></div>'
+          '<td><b>' + ((p.bag || {}).utama == null ? p.jumlah : p.bag.utama) + '</b> butir TO' + (p.bag && (p.bag.latihan || p.bag.survei) ? '<div class="kecil">' + (p.bag.latihan ? Admin.kat('latihan') + ' ' + p.bag.latihan + ' ' : '') + (p.bag.survei ? Admin.kat('survei') + ' ' + p.bag.survei : '') + '</div>' : '') +
+          '<div class="kecil muted">' + Object.keys(p.bentuk).map((b) => esc((BENTUK_LABEL[b] || b).replace('Pilihan ganda kompleks', 'PGK').replace('Pilihan ganda', 'PG')) + ' ' + p.bentuk[b]).join(' · ') + '</div></td>' +
+          '<td>' + ((p.rencana || []).length > 1 ? alurMini(p.rencana) : p.durasi + ' menit') + '<div class="kecil muted">' + jadwal(p) + '</div></td>' + (sa ? '<td class="mono"><b>' + esc(p.tokenInfo ? p.tokenInfo.token : '') + '</b>' + (p.rotasi ? '<div class="kecil muted">rotasi ' + p.rotasi + ' mnt</div>' : '') + '</td>' : '') +
+          '<td class="kecil">' + p.sesi.selesai + ' selesai<br>' + p.sesi.mulai + ' berjalan</td><td>' + Admin.status(p.status) + '</td>' +
+          '<td style="white-space:nowrap"><button class="btn kecil ikon hantu" data-pk="unduhL" data-id="' + esc(p.id) + '" title="Unduh soal (PDF/DOCX)" aria-label="Unduh soal ' + esc(p.id) + '">' + ik('unduh') + '</button>' +
+          (sa ? '<button class="btn kecil ikon hantu" data-pk="hapusL" data-id="' + esc(p.id) + '" title="Hapus paket" aria-label="Hapus paket ' + esc(p.id) + '" style="color:var(--bad)">' + ik('hapus') + '</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>'
         : '<div class="kartu kosong"><strong>Belum ada paket</strong>' + (sa ? 'Buat paket pertama, lalu masukkan soal yang sudah disetujui.' : 'Super Admin belum membuat paket.') + '</div>');
   }
   function formPaket(p, simpan) {
-    p = p || { durasi: 90, acakSoal: true, acakOpsi: true, pembahasan: 'tutup', status: 'draft', kelas: [], rotasi: 15 };
+    const set = Admin.b().set || {}, nb = (v, d) => (v === '' || v == null || isNaN(+v) ? d : +v);
+    p = p || { durasi: nb(set.SUBTES_UTAMA_MENIT, 75), acakSoal: true, acakOpsi: true, pembahasan: 'tutup', status: 'draft', kelas: [], rotasi: 15 };
+    const st = p.subtes || { latihan: { aktif: true, d: nb(set.SUBTES_LATIHAN_MENIT, 5) }, survei: { aktif: true, d: nb(set.SUBTES_SURVEI_MENIT, 25) },
+      tunggu: { utama: nb(set.TUNGGU_UTAMA_DETIK, 30), survei: nb(set.TUNGGU_SURVEI_DETIK, 30) } };
+    const nomor = (k) => '<span class="mono" style="color:var(--navy);font-weight:700">' + (BAGIAN.indexOf(k) + 1) + '.</span> ';
     modal({ judul: p.id ? 'Ubah paket ' + p.id : 'Buat paket TO', ukuran: 'lg', isi: '<div class="baris dua">' + field('Nama paket', '<input class="inp" id="pf-nama" value="' + esc(p.nama || '') + '" placeholder="TO-01 Numerasi Kelas IX">') +
-      field('Mapel', '<select class="inp" id="pf-mapel">' + opsi(Admin.b().mapel, p.mapel) + '</select>') + field('Durasi (menit)', '<input class="inp" type="number" min="5" max="600" id="pf-durasi" value="' + (p.durasi || 90) + '">') +
+      field('Mapel', '<select class="inp" id="pf-mapel">' + opsi(Admin.b().mapel, p.mapel) + '</select>') +
       field('Rotasi token (menit, 0 = tetap)', '<input class="inp" type="number" min="0" max="120" id="pf-rotasi" value="' + (p.rotasi == null ? 15 : p.rotasi) + '">') +
       field('Dibuka', '<input class="inp" type="datetime-local" id="pf-buka" value="' + fmt.inputTgl(p.buka) + '">', 'Kosongkan = dibuka saat status Aktif.') + field('Ditutup', '<input class="inp" type="datetime-local" id="pf-tutup" value="' + fmt.inputTgl(p.tutup) + '">') + '</div>' +
+      '<div class="lbl" style="margin-bottom:6px">Subtes dalam paket <span class="kecil muted" style="font-weight:400">— satu token, satu kali masuk; subtes tanpa soal otomatis dilewati</span></div><div class="subtes-ed">' +
+        '<div class="baris-st"><label class="cek"><input type="checkbox" id="pf-lat-on"' + (st.latihan.aktif ? ' checked' : '') + '>' + nomor('latihan') + esc(Admin.labelKat('latihan')) + '</label>' +
+          field('Durasi (menit)', '<input class="inp" type="number" min="1" max="180" id="pf-lat-d" value="' + st.latihan.d + '">') + '<span class="kecil muted">Pemanasan, tidak dinilai</span></div>' +
+        '<div class="baris-st"><b>' + nomor('utama') + esc(Admin.labelKat('utama')) + ' <span class="kecil muted" style="font-weight:400">(dinilai)</span></b>' +
+          field('Durasi (menit)', '<input class="inp" type="number" min="5" max="600" id="pf-durasi" value="' + (p.durasi || 75) + '">') + field('Jeda sebelumnya (detik)', '<input class="inp" type="number" min="0" max="900" id="pf-tg-u" value="' + st.tunggu.utama + '">') + '</div>' +
+        '<div class="baris-st"><label class="cek"><input type="checkbox" id="pf-sur-on"' + (st.survei.aktif ? ' checked' : '') + '>' + nomor('survei') + esc(Admin.labelKat('survei')) + '</label>' +
+          field('Durasi (menit)', '<input class="inp" type="number" min="1" max="180" id="pf-sur-d" value="' + st.survei.d + '">') + field('Jeda sebelumnya (detik)', '<input class="inp" type="number" min="0" max="900" id="pf-tg-s" value="' + st.tunggu.survei + '">') + '</div></div>' +
       '<div class="lbl" style="margin-bottom:6px">Kelas peserta</div><div class="baris" style="margin-bottom:14px">' + (Admin.b().kelas.length ? Admin.b().kelas.map((k) => '<label class="cek"><input type="checkbox" class="pf-kelas" value="' + esc(k) + '"' + (p.kelas.indexOf(k) >= 0 ? ' checked' : '') + '>' + esc(k) + '</label>').join('') : '<span class="kecil muted">Belum ada data siswa. Tanpa centang = semua kelas.</span>') + '</div>' +
       '<div class="baris dua"><label class="cek"><input type="checkbox" id="pf-acaks"' + (p.acakSoal ? ' checked' : '') + '>Acak urutan soal per siswa (stimulus kelompok tetap bersama)</label><label class="cek"><input type="checkbox" id="pf-acako"' + (p.acakOpsi ? ' checked' : '') + '>Acak urutan pilihan jawaban</label></div>' +
       '<div class="baris dua" style="margin-top:14px">' + field('Pembahasan untuk siswa', '<select class="inp" id="pf-bahas">' + opsi([{ v: 'tutup', l: 'Tertutup' }, { v: 'buka', l: 'Dibuka setelah siswa selesai' }], p.pembahasan) + '</select>') +
       field('Status', '<select class="inp" id="pf-status">' + opsi([{ v: 'draft', l: 'Draft' }, { v: 'aktif', l: 'Aktif (bisa dikerjakan)' }, { v: 'ditutup', l: 'Ditutup' }], p.status) + '</select>') + '</div>' +
       field('Keterangan untuk siswa', '<input class="inp" id="pf-desk" value="' + esc(p.deskripsi || '') + '">'),
       tombol: [{ label: 'Batal' }, { label: 'Simpan paket', kelas: 'utama', aksi: async (m) => {
-        const r = await api('paket.simpan', { id: p.id, nama: $('#pf-nama', m).value, mapel: $('#pf-mapel', m).value, durasi_menit: $('#pf-durasi', m).value, rotasi_token: $('#pf-rotasi', m).value,
+        const subtes = { latihan: { aktif: $('#pf-lat-on', m).checked, d: $('#pf-lat-d', m).value }, survei: { aktif: $('#pf-sur-on', m).checked, d: $('#pf-sur-d', m).value },
+          tunggu: { utama: $('#pf-tg-u', m).value, survei: $('#pf-tg-s', m).value } };
+        const r = await api('paket.simpan', { id: p.id, nama: $('#pf-nama', m).value, mapel: $('#pf-mapel', m).value, durasi_menit: $('#pf-durasi', m).value, rotasi_token: $('#pf-rotasi', m).value, subtes,
           waktu_buka: $('#pf-buka', m).value, waktu_tutup: $('#pf-tutup', m).value, kelas: $$('.pf-kelas:checked', m).map((x) => x.value), acak_soal: $('#pf-acaks', m).checked, acak_opsi: $('#pf-acako', m).checked,
           mode_pembahasan: $('#pf-bahas', m).value, status: $('#pf-status', m).value, deskripsi: $('#pf-desk', m).value });
         toast(r.message, r.success ? 'ok' : 'err', 7000);
@@ -51,23 +71,26 @@
       } }] });
   }
   async function aksiPaket(el, e) {
-    const tr = e.target.closest('[data-buka]');
-    if (tr) return go('#/admin/paket/' + tr.dataset.buka);
     const b = e.target.closest('[data-pk]');
+    const tr = e.target.closest('[data-buka]');
+    if (tr && !b) return go('#/admin/paket/' + tr.dataset.buka);
     if (!b) return;
     const a = b.dataset.pk, D = el.det;
     if (a === 'baru') formPaket(null, (id) => go('#/admin/paket/' + id));
     if (a === 'kembali') go('#/admin/paket');
     if (a === 'ubah') formPaket(D.meta, () => detailPaket(el, D.meta.id));
     if (a === 'token') { const r = await api('paket.token', { id: D.meta.id, aksi: 'baru' }); if (r.success) { D.meta.tokenInfo = r.data; kartuToken(el); toast('Token baru: ' + r.data.token, 'ok'); basi('paket'); } else toast(r.message, 'err'); }
-    if (a === 'naik' || a === 'turun') { const i = +b.dataset.i, j = i + (a === 'naik' ? -1 : 1); if (D.items[j]) { const t = D.items[i]; D.items[i] = D.items[j]; D.items[j] = t; D.ubah = true; renderSusunan(el); } }
+    if (a === 'naik' || a === 'turun') {
+      const i = +b.dataset.i, j = i + (a === 'naik' ? -1 : 1);
+      if (D.items[j] && bagOf(D.items[j]) === bagOf(D.items[i])) { const t = D.items[i]; D.items[i] = D.items[j]; D.items[j] = t; D.ubah = true; renderSusunan(el); }
+    }
     if (a === 'buang') { D.items.splice(+b.dataset.i, 1); D.ubah = true; renderSusunan(el); }
-    if (a === 'tambah') pemilihSoal(el);
+    if (a === 'tambah') pemilihSoal(el, b.dataset.bag || 'utama');
     if (a === 'otomatis') susunOtomatis(el);
     if (a === 'simpanSusun') {
       $$('[data-bobot]', el).forEach((x) => { D.items[+x.dataset.bobot].bobot = Number(x.value) || 1; });
       sibuk(b, true);
-      const r = await api('paket.soal', { id: D.meta.id, items: D.items.map((x) => ({ id_soal: x.id, bobot: x.bobot })) });
+      const r = await api('paket.soal', { id: D.meta.id, items: D.items.map((x) => ({ id_soal: x.id, bobot: x.bobot, bagian: bagOf(x) })) });
       sibuk(b, false);
       toast(r.message, r.success ? 'ok' : 'err', 8000);
       if (r.success) { basi('paket'); detailPaket(el, D.meta.id); }
@@ -80,7 +103,46 @@
       if (!r.data.soal.length) return toast('Paket belum berisi soal tersimpan.', 'warn');
       CBT.pratinjau(r.data, '#/admin/paket/' + D.meta.id);
     }
-    if (a === 'hapus' && await konfirmasi('Hapus paket ' + D.meta.id + '?', { bahaya: true, ya: 'Hapus' })) { const r = await api('paket.hapus', { id: D.meta.id }); toast(r.message, r.success ? 'ok' : 'err', 7000); if (r.success) { basi('paket'); go('#/admin/paket'); } }
+    if (a === 'unduh') unduhSoal(D.meta, hitungBag(D.items));
+    if (a === 'unduhL') { const p = (el.paket || []).find((x) => x.id === b.dataset.id); if (p) unduhSoal(p, p.bag || { utama: p.jumlah }); }
+    if (a === 'hapus') hapusPaket(D.meta.id, D.meta.nama, () => go('#/admin/paket'));
+    if (a === 'hapusL') { const p = (el.paket || []).find((x) => x.id === b.dataset.id); if (p) hapusPaket(p.id, p.nama, () => { el.paket = el.paket.filter((x) => x.id !== p.id); daftarPaket(el); }); }
+  }
+  const hitungBag = (items) => { const n = { latihan: 0, utama: 0, survei: 0 }; (items || []).forEach((x) => { n[bagOf(x)]++; }); return n; };
+  /** Hapus paket. Paket yang sudah punya sesi/hasil siswa butuh konfirmasi ketik kode paket. */
+  async function hapusPaket(id, nama, selesai) {
+    if (!(await konfirmasi('Hapus paket <b>' + esc(id) + '</b> — ' + esc(nama) + '? Paket yang dihapus tidak bisa dikembalikan. Soal di bank soal tetap aman.', { judul: 'Hapus paket TO', bahaya: true, ya: 'Hapus paket' }))) return;
+    let r = await api('paket.hapus', { id });
+    if (!r.success && r.code === 'ADA_HASIL') {
+      const kode = await modal({ judul: 'Hapus paket beserta hasil siswa', isi: '<div class="alert bad">' + ik('awas') + '<div>Paket <b>' + esc(id) + '</b> sudah dikerjakan <b>' + (r.sesi || 0) + '</b> siswa (' + (r.selesai || 0) + ' selesai). Menghapus paket juga menghapus <b>semua sesi, jawaban, nilai, dan analisis butir</b> paket ini secara permanen.</div></div>' +
+        field('Ketik kode paket untuk konfirmasi', '<input class="inp mono" id="hp-kode" autocomplete="off" spellcheck="false" placeholder="' + esc(id) + '">', 'Saran: unduh rekap nilai di Hasil &amp; Analisis → Unduh Excel sebelum menghapus.'),
+        tombol: [{ label: 'Batal', nilai: null }, { label: ik('hapus') + 'Hapus permanen', kelas: 'bahaya', aksi: (m) => { const k = $('#hp-kode', m).value.trim(); if (k.toUpperCase() !== id.toUpperCase()) { toast('Kode tidak cocok. Ketik ' + id + '.', 'warn'); return false; } return k; } }] }).hasil;
+      if (!kode) return;
+      r = await api('paket.hapus', { id, paksa: true, konfirmasi: kode });
+    }
+    toast(r.message, r.success ? 'ok' : 'err', 9000);
+    if (r.success) { basi('paket', 'dash', 'hr_' + id); if (selesai) selesai(); }
+  }
+  /** Unduh naskah soal paket ke PDF/DOCX untuk arsip pribadi (opsional kunci & pembahasan). */
+  function unduhSoal(m, bag) {
+    const ada = BAGIAN.filter((k) => bag && bag[k]);
+    if (!ada.length) return toast('Paket ini belum berisi soal.', 'warn');
+    const md = modal({ judul: 'Unduh soal — ' + m.id, ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">' + esc(m.nama) + ' · untuk arsip pribadi. Rumus diubah menjadi teks yang terbaca di Word/PDF dan gambar soal ikut disisipkan.</p>' +
+      field('Format berkas', '<div class="radio-kartu"><label><input type="radio" name="us-f" value="pdf" checked><span><b>PDF</b><br><span class="kecil muted">Siap cetak, tata letak terkunci.</span></span></label>' +
+        '<label><input type="radio" name="us-f" value="docx"><span><b>Word (.docx)</b><br><span class="kecil muted">Bisa diedit lagi.</span></span></label></div>') +
+      '<div class="lbl" style="margin-bottom:6px">Isi dokumen</div><div class="baris dua" style="margin-bottom:14px"><label class="cek"><input type="checkbox" id="us-kunci">Sertakan kunci jawaban</label><label class="cek"><input type="checkbox" id="us-bahas">Sertakan pembahasan soal</label></div>' +
+      '<div class="lbl" style="margin-bottom:6px">Subtes yang diunduh</div><div class="baris" style="margin-bottom:10px">' + ada.map((k) => '<label class="cek"><input type="checkbox" class="us-bag" value="' + k + '" checked>' + esc(Admin.labelKat(k)) + ' (' + bag[k] + ' soal)</label>').join('') + '</div>' +
+      '<div class="alert warn" id="us-awas" hidden>' + ik('gembok') + '<div>Dokumen berisi kunci/pembahasan. Simpan untuk diri sendiri dan jangan dibagikan kepada siswa.</div></div>' +
+      '<p class="kecil muted" style="margin:0">Penyusunan dokumen di server Google memerlukan sekitar 10–60 detik.</p>',
+      tombol: [{ label: 'Batal' }, { label: ik('unduh') + 'Unduh', kelas: 'utama', aksi: async (mm) => {
+        const bagian = $$('.us-bag:checked', mm).map((x) => x.value);
+        if (!bagian.length) { toast('Pilih minimal satu subtes.', 'warn'); return false; }
+        const r = await api('paket.unduhSoal', { id: m.id, format: (mm.querySelector('[name=us-f]:checked') || {}).value || 'pdf', kunci: $('#us-kunci', mm).checked, pembahasan: $('#us-bahas', mm).checked, bagian });
+        if (!r.success) { toast(r.message, 'err', 10000); return false; }
+        unduhB64(r.data.b64, r.data.nama, r.data.mime);
+        toast(r.message, 'ok');
+      } }] });
+    md.el.addEventListener('change', () => { $('#us-awas', md.el).hidden = !($('#us-kunci', md.el).checked || $('#us-bahas', md.el).checked); });
   }
   async function detailPaket(el, id) {
     const box = $('#pk-detail', el);
@@ -90,15 +152,20 @@
     const D = el.det = r.data, m = D.meta, sa = Admin.sa(), terkunci = D.meta.sesi > 0;
     box.innerHTML = '<div class="kepala-hal"><div><button class="btn kecil hantu" data-pk="kembali">' + ik('kiri') + 'Semua paket</button><h1 style="margin-top:6px">' + esc(m.nama) + '</h1>' +
       '<p><span class="chip-id">' + esc(m.id) + '</span> · ' + esc(m.mapel) + ' · ' + m.durasi + ' menit · ' + esc(m.kelas.join(', ') || 'semua kelas') + ' · ' + jadwal(m) + '</p></div>' +
-      '<div class="aksi">' + Admin.status(m.status) + '<button class="btn" data-pk="pratinjau">' + ik('mata') + 'Pratinjau tampilan siswa</button>' + (sa ? '<button class="btn" data-pk="ubah">' + ik('pensil') + 'Ubah</button>' + (terkunci ? '' : '<button class="btn bahaya" data-pk="hapus">' + ik('hapus') + '</button>') : '') + '</div></div>' +
+      '<div class="aksi">' + Admin.status(m.status) + '<button class="btn" data-pk="pratinjau">' + ik('mata') + 'Pratinjau tampilan siswa</button><button class="btn" data-pk="unduh">' + ik('unduh') + 'Unduh soal</button>' +
+      (sa ? '<button class="btn" data-pk="ubah">' + ik('pensil') + 'Ubah</button><button class="btn bahaya" data-pk="hapus" title="Hapus paket">' + ik('hapus') + 'Hapus</button>' : '') + '</div></div>' +
       '<div class="kisi k84"><section class="kartu"><div class="kartu-kepala"><div><h2>Susunan soal</h2><p id="pk-ringkas"></p></div>' +
-      (sa && !terkunci ? '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn kecil" data-pk="otomatis">' + ik('bahas') + 'Susun otomatis (kisi-kisi)</button><button class="btn kecil" data-pk="tambah">' + ik('tambah') + 'Tambah dari bank</button></div>' : '') + '</div>' +
+      '</div>' +
       (terkunci ? '<div class="alert info">' + ik('gembok') + '<div>Susunan terkunci karena paket sudah dikerjakan ' + D.meta.sesi + ' siswa.</div></div>' : '') +
       '<div id="pk-susun"></div>' + (sa && !terkunci ? '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn utama" data-pk="simpanSusun">' + ik('cek') + 'Simpan susunan</button></div>' : '') + '</section>' +
       '<aside><section class="kartu" id="pk-token"></section><section class="kartu" style="margin-top:16px"><h3 style="margin:0 0 10px;font-size:16px">Pengaturan</h3><dl class="kecil" style="display:grid;grid-template-columns:1fr auto;gap:6px 10px;margin:0">' +
       '<dt class="muted">Acak soal</dt><dd style="margin:0">' + (m.acakSoal ? 'Ya' : 'Tidak') + '</dd><dt class="muted">Acak opsi</dt><dd style="margin:0">' + (m.acakOpsi ? 'Ya' : 'Tidak') + '</dd><dt class="muted">Pembahasan siswa</dt><dd style="margin:0">' + (m.pembahasan === 'buka' ? 'Dibuka' : 'Tertutup') + '</dd>' +
-      '<dt class="muted">Sesi tercatat</dt><dd style="margin:0">' + D.meta.sesi + '</dd></dl>' + (m.status === 'aktif' ? '<a class="btn lebar" style="margin-top:14px" href="#/admin/monitoring/' + esc(m.id) + '">' + ik('monitor') + 'Buka monitoring</a>' : '') + '</section></aside></div>';
-    D.items = D.items.map((x) => Object.assign({}, x));
+      '<dt class="muted">Sesi tercatat</dt><dd style="margin:0">' + D.meta.sesi + '</dd>' +
+      '<dt class="muted">' + esc(Admin.labelKat('latihan')) + '</dt><dd style="margin:0">' + (m.subtes && m.subtes.latihan.aktif ? m.subtes.latihan.d + ' menit' : 'Nonaktif') + '</dd>' +
+      '<dt class="muted">Jeda → ' + esc(Admin.labelKat('utama')) + '</dt><dd style="margin:0">' + (m.subtes ? m.subtes.tunggu.utama : 0) + ' detik</dd>' +
+      '<dt class="muted">' + esc(Admin.labelKat('survei')) + '</dt><dd style="margin:0">' + (m.subtes && m.subtes.survei.aktif ? m.subtes.survei.d + ' menit' : 'Nonaktif') + '</dd>' +
+      '<dt class="muted">Jeda → ' + esc(Admin.labelKat('survei')) + '</dt><dd style="margin:0">' + (m.subtes ? m.subtes.tunggu.survei : 0) + ' detik</dd></dl>' + (m.status === 'aktif' ? '<a class="btn lebar" style="margin-top:14px" href="#/admin/monitoring/' + esc(m.id) + '">' + ik('monitor') + 'Buka monitoring</a>' : '') + '</section></aside></div>';
+    D.items = D.items.map((x) => Object.assign({}, x, { bagian: bagOf(x) }));
     renderSusunan(el);
     kartuToken(el);
   }
@@ -119,31 +186,53 @@
     }
   }
   function renderSusunan(el) {
-    const D = el.det, sa = Admin.sa() && !(D.meta.sesi > 0);
+    const D = el.det, sa = Admin.sa() && !(D.meta.sesi > 0), m = D.meta, st = m.subtes || {};
     const peta = {};
     (App.data.soal || []).forEach((s) => { peta[s.id] = s; });
-    const bentuk = {};
-    D.items.forEach((x) => { const s = peta[x.id] || x; bentuk[s.bentuk] = (bentuk[s.bentuk] || 0) + 1; });
-    $('#pk-ringkas', el).textContent = D.items.length + ' butir · ' + Object.keys(bentuk).map((b) => (BENTUK_LABEL[b] || b) + ' ' + bentuk[b]).join(', ') + (D.ubah ? ' · belum disimpan' : '');
-    $('#pk-susun', el).innerHTML = D.items.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th class="angka">Bobot</th>' + (sa ? '<th></th>' : '') + '</tr></thead><tbody>' +
-      D.items.map((x, i) => { const s = peta[x.id] || x;
-        return '<tr><td class="mono">' + (i + 1) + '</td><td><span class="chip-id">' + esc(x.id) + '</span>' + (s.stim ? ' <span class="lencana polos">' + esc(s.stim) + '</span>' : '') + (s.status && s.status !== 'disetujui' ? ' ' + Admin.status(s.status) : '') + (x.hilang ? ' ' + lencana('Soal terhapus', 'bad') : '') +
-          '<div class="ringkas kecil">' + esc(s.ring || '') + '</div></td><td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td>' +
-          '<td class="angka">' + (sa ? '<input class="inp" type="number" min="0.5" max="10" step="0.5" data-bobot="' + i + '" value="' + (x.bobot || 1) + '" style="width:76px;min-height:32px;padding:4px 8px">' : (x.bobot || 1)) + '</td>' +
-          (sa ? '<td style="white-space:nowrap"><button class="btn kecil ikon hantu" data-pk="naik" data-i="' + i + '" aria-label="Naik">↑</button><button class="btn kecil ikon hantu" data-pk="turun" data-i="' + i + '" aria-label="Turun">↓</button><button class="btn kecil ikon hantu" data-pk="buang" data-i="' + i + '" aria-label="Buang">' + ik('x') + '</button></td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>'
-      : '<div class="kosong"><strong>Paket masih kosong</strong>Tambahkan soal disetujui dari bank, atau susun otomatis berdasarkan kisi-kisi.</div>';
+    const n = hitungBag(D.items);
+    $('#pk-ringkas', el).textContent = BAGIAN.filter((k) => n[k]).map((k) => Admin.labelKat(k) + ' ' + n[k]).join(' · ') + (D.items.length ? '' : 'Belum ada soal') + (D.ubah ? ' · belum disimpan' : '');
+    const aktif = (k) => k === 'utama' || !st[k] || st[k].aktif;
+    const durasi = (k) => k === 'utama' ? m.durasi : (st[k] ? st[k].d : '');
+    $('#pk-susun', el).innerHTML = BAGIAN.map((bag) => {
+      const idx = [];
+      D.items.forEach((x, i) => { if (bagOf(x) === bag) idx.push(i); });
+      if (!idx.length && !aktif(bag) && !sa) return '';
+      const bentuk = {};
+      idx.forEach((i) => { const s = peta[D.items[i].id] || D.items[i]; bentuk[s.bentuk] = (bentuk[s.bentuk] || 0) + 1; });
+      return '<section class="grup-bagian" data-grup="' + bag + '"><header><h3><span class="mono" style="color:var(--navy)">' + (BAGIAN.indexOf(bag) + 1) + '.</span> ' + esc(Admin.labelKat(bag)) + ' ' + Admin.kat(bag) +
+        '<span class="kecil muted" style="font-weight:400">' + idx.length + ' soal · ' + durasi(bag) + ' menit' + (bag === 'utama' ? ' · dinilai' : ' · tidak dinilai') + '</span>' + (aktif(bag) ? '' : lencana('Subtes nonaktif', 'warn')) + '</h3>' +
+        (sa ? '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (bag === 'utama' ? '<button class="btn kecil" data-pk="otomatis">' + ik('bahas') + 'Susun otomatis (kisi-kisi)</button>' : '') +
+          '<button class="btn kecil" data-pk="tambah" data-bag="' + bag + '">' + ik('tambah') + 'Tambah soal ' + esc(Admin.labelKat(bag)) + '</button></div>' : '') + '</header>' +
+        (!aktif(bag) && idx.length ? '<div class="alert warn" style="margin:10px 14px">' + ik('awas') + '<div>Subtes ini dinonaktifkan di pengaturan paket, jadi soalnya tidak akan dikerjakan siswa. Aktifkan lewat tombol Ubah.</div></div>' : '') +
+        (idx.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th class="angka">Bobot</th>' + (sa ? '<th></th>' : '') + '</tr></thead><tbody>' +
+          idx.map((i, no) => { const x = D.items[i], s = peta[x.id] || x;
+            return '<tr><td class="mono">' + (no + 1) + '</td><td><span class="chip-id">' + esc(x.id) + '</span>' + (s.stim ? ' <span class="lencana polos">' + esc(s.stim) + '</span>' : '') + (s.status && s.status !== 'disetujui' ? ' ' + Admin.status(s.status) : '') + (x.hilang ? ' ' + lencana('Soal terhapus', 'bad') : '') +
+              '<div class="ringkas kecil">' + esc(s.ring || '') + '</div></td><td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td>' +
+              '<td class="angka">' + (sa && bag === 'utama' ? '<input class="inp" type="number" min="0.5" max="10" step="0.5" data-bobot="' + i + '" value="' + (x.bobot || 1) + '" style="width:76px;min-height:32px;padding:4px 8px">' : (bag === 'utama' ? (x.bobot || 1) : '—')) + '</td>' +
+              (sa ? '<td style="white-space:nowrap"><button class="btn kecil ikon hantu" data-pk="naik" data-i="' + i + '" aria-label="Naik">↑</button><button class="btn kecil ikon hantu" data-pk="turun" data-i="' + i + '" aria-label="Turun">↓</button><button class="btn kecil ikon hantu" data-pk="buang" data-i="' + i + '" aria-label="Buang">' + ik('x') + '</button></td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>'
+          : '<div class="kosong"><strong>Belum ada soal ' + esc(Admin.labelKat(bag)) + '</strong>' + (bag === 'utama' ? 'Tambahkan soal disetujui dari bank, atau susun otomatis berdasarkan kisi-kisi.' : 'Opsional. Subtes tanpa soal otomatis dilewati siswa.') + '</div>') + '</section>';
+    }).join('');
   }
-  function pemilihSoal(el) {
+  /** Sisipkan butir baru di akhir kelompok subtesnya (urutan latihan → utama → survei tetap terjaga). */
+  function sisipBagian(D, bag, baru) {
+    let pos = -1;
+    D.items.forEach((x, i) => { if (bagOf(x) === bag) pos = i; });
+    if (pos < 0) { pos = D.items.findIndex((x) => BAGIAN.indexOf(bagOf(x)) > BAGIAN.indexOf(bag)); if (pos < 0) pos = D.items.length; }
+    else pos++;
+    D.items.splice(pos, 0, ...baru.map((x) => Object.assign({ bobot: 1 }, x, { bagian: bag })));
+  }
+  function pemilihSoal(el, bag) {
+    bag = bag || 'utama';
     const D = el.det, ada = new Set(D.items.map((x) => x.id)), terpilih = new Set();
-    const kandidat = (App.data.soal || []).filter((s) => s.status === 'disetujui' && s.mapel === D.meta.mapel && !ada.has(s.id));
-    const m = modal({ judul: 'Tambah soal dari bank — ' + D.meta.mapel, ukuran: 'xl', isi: '<div class="saring"><input class="inp cari" id="ps-cari" placeholder="Cari…"><select class="inp" id="ps-komp">' + opsi(Admin.kompMapel(D.meta.mapel).map((k) => ({ v: k.id, l: k.nama })), '', 'Semua kompetensi') + '</select>' +
-      '<select class="inp" id="ps-bentuk">' + opsi(Object.keys(BENTUK_LABEL).map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua bentuk') + '</select><select class="inp" id="ps-kes">' + opsi(['mudah', 'sedang', 'sulit'], '', 'Semua kesulitan') + '</select></div>' +
-      '<p class="kecil muted">Soal dengan stimulus kelompok ditambahkan bersama soal saudaranya. <b id="ps-n">0 soal dipilih</b></p><div class="tbl-wrap" style="max-height:52vh"><table class="tbl"><thead><tr><th class="cek-sel"><input type="checkbox" id="ps-semua" aria-label="Pilih semua yang tampil"></th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th>Kesulitan</th></tr></thead><tbody id="ps-isi"></tbody></table></div>',
+    const kandidat = (App.data.soal || []).filter((s) => s.status === 'disetujui' && s.mapel === D.meta.mapel && !ada.has(s.id) && (s.kat || 'utama') === bag);
+    const m = modal({ judul: 'Tambah soal ' + Admin.labelKat(bag) + ' — ' + D.meta.mapel, ukuran: 'xl', isi: '<div class="saring"><input class="inp cari" id="ps-cari" placeholder="Cari…"><select class="inp" id="ps-komp">' + opsi(Admin.kompMapel(D.meta.mapel).map((k) => ({ v: k.id, l: k.nama })), '', 'Semua kompetensi') + '</select>' +
+      '<select class="inp" id="ps-bentuk">' + opsi(Object.keys(BENTUK_LABEL).filter((k) => k !== 'SKALA' || bag === 'survei').map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua bentuk') + '</select><select class="inp" id="ps-kes">' + opsi(['mudah', 'sedang', 'sulit'], '', 'Semua kesulitan') + '</select></div>' +
+      '<p class="kecil muted">Hanya soal berkategori <b>' + esc(Admin.labelKat(bag)) + '</b> yang tampil di sini' + (bag === 'utama' ? '' : ' — terpisah dari soal TO utama') + '. Soal dengan stimulus kelompok ditambahkan bersama soal saudaranya. <b id="ps-n">0 soal dipilih</b></p><div class="tbl-wrap" style="max-height:52vh"><table class="tbl"><thead><tr><th class="cek-sel"><input type="checkbox" id="ps-semua" aria-label="Pilih semua yang tampil"></th><th>Soal</th><th>Bentuk</th><th>Kompetensi</th><th>Kesulitan</th></tr></thead><tbody id="ps-isi"></tbody></table></div>',
       tombol: [{ label: 'Batal' }, { label: 'Tambahkan terpilih', kelas: 'utama', aksi: (mm) => {
         const pilih = new Set(terpilih);
         if (!pilih.size) { toast('Belum ada soal yang dicentang.', 'warn'); return false; }
         Array.from(pilih).forEach((id) => { const s = kandidat.find((x) => x.id === id); if (s && s.stim) kandidat.filter((x) => x.stim === s.stim).forEach((x) => pilih.add(x.id)); });
-        pilih.forEach((id) => { if (!ada.has(id)) D.items.push({ id, bobot: 1 }); });
+        sisipBagian(D, bag, Array.from(pilih).filter((id) => !ada.has(id)).map((id) => ({ id })));
         D.ubah = true; renderSusunan(el);
         toast(pilih.size + ' soal ditambahkan. Tekan Simpan susunan.', 'ok');
       } }] });
@@ -153,7 +242,7 @@
       $('#ps-semua', m.el).checked = false;
       $('#ps-isi', m.el).innerHTML = kandidat.filter((s) => (!q || (s.id + s.ring).toLowerCase().indexOf(q) >= 0) && (!k || s.idk === k) && (!b || s.bentuk === b) && (!ks || s.kes === ks)).slice(0, 300)
         .map((s) => '<tr class="klik" data-baris="' + esc(s.id) + '"><td><input type="checkbox" data-ps="' + esc(s.id) + '"' + (terpilih.has(s.id) ? ' checked' : '') + '></td><td><span class="chip-id">' + esc(s.id) + '</span>' + (s.stim ? ' <span class="lencana polos">' + esc(s.stim) + '</span>' : '') + '<div class="ringkas kecil">' + esc(s.ring) + '</div></td><td>' + Admin.bentuk(s.bentuk) + '</td><td class="kecil">' + esc(Admin.namaKomp(s.idk)) + '</td><td>' + esc(s.kes) + '</td></tr>').join('') ||
-        '<tr><td colspan="5" class="kosong">Tidak ada soal disetujui yang cocok.</td></tr>';
+        '<tr><td colspan="5" class="kosong">Tidak ada soal ' + esc(Admin.labelKat(bag)) + ' disetujui yang cocok.' + (bag === 'utama' ? '' : ' Buat atau unggah soal dengan kategori ' + esc(Admin.labelKat(bag)) + ' di Bank Soal.') + '</td></tr>';
     };
     isi();
     $('#ps-cari', m.el).addEventListener('input', debounce(isi, 200));
@@ -171,16 +260,17 @@
   function susunOtomatis(el) {
     const D = el.det, komp = Admin.kompMapel(D.meta.mapel);
     const baris = (i) => '<div class="baris" style="grid-template-columns:2fr 1.2fr 1fr 90px 36px;align-items:end" data-kisi>' + field(i ? '' : 'Kompetensi', '<select class="inp" data-k="idk">' + opsi(komp.map((k) => ({ v: k.id, l: k.nama })), '', 'Semua') + '</select>') +
-      field(i ? '' : 'Bentuk', '<select class="inp" data-k="bentuk">' + opsi(Object.keys(BENTUK_LABEL).map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua') + '</select>') + field(i ? '' : 'Kesulitan', '<select class="inp" data-k="kes">' + opsi(['mudah', 'sedang', 'sulit'], '', 'Semua') + '</select>') +
+      field(i ? '' : 'Bentuk', '<select class="inp" data-k="bentuk">' + opsi(Object.keys(BENTUK_LABEL).filter((k) => k !== 'SKALA').map((k) => ({ v: k, l: BENTUK_LABEL[k] })), '', 'Semua') + '</select>') + field(i ? '' : 'Kesulitan', '<select class="inp" data-k="kes">' + opsi(['mudah', 'sedang', 'sulit'], '', 'Semua') + '</select>') +
       field(i ? '' : 'Jumlah', '<input class="inp" type="number" min="1" value="5" data-k="jumlah">') + '<button class="btn kecil ikon hantu" data-hapus-kisi style="margin-bottom:14px">' + ik('x') + '</button></div>';
-    const m = modal({ judul: 'Susun otomatis dari kisi-kisi', ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">Soal diambil acak dari bank (status disetujui) sesuai baris kisi-kisi. Soal stimulus kelompok diambil bersama saudaranya.</p><div id="ks">' + baris(0) + '</div>' +
-      '<button class="btn kecil" id="ks-tambah">' + ik('tambah') + 'Baris kisi-kisi</button><label class="cek" style="margin-top:12px"><input type="checkbox" id="ks-ganti">Ganti susunan saat ini (bila tidak dicentang, soal ditambahkan)</label>',
+    const m = modal({ judul: 'Susun otomatis dari kisi-kisi', ukuran: 'lg', isi: '<p class="kecil muted" style="margin-top:0">Soal TO utama diambil acak dari bank (status disetujui) sesuai baris kisi-kisi. Soal latihan & survei tidak ikut. Soal stimulus kelompok diambil bersama saudaranya.</p><div id="ks">' + baris(0) + '</div>' +
+      '<button class="btn kecil" id="ks-tambah">' + ik('tambah') + 'Baris kisi-kisi</button><label class="cek" style="margin-top:12px"><input type="checkbox" id="ks-ganti">Ganti soal TO utama saat ini (bila tidak dicentang, soal ditambahkan)</label>',
       tombol: [{ label: 'Batal' }, { label: 'Ambil soal', kelas: 'utama', aksi: async (mm) => {
         const kisi = $$('[data-kisi]', mm).map((r) => { const o = {}; $$('[data-k]', r).forEach((x) => { o[x.dataset.k] = x.value; }); return o; });
         const ganti = $('#ks-ganti', mm).checked;
         const r = await api('paket.otomatis', { mapel: D.meta.mapel, kisi, kecuali: ganti ? [] : D.items.map((x) => x.id) });
         if (!r.success) { toast(r.message, 'err'); return false; }
-        D.items = (ganti ? [] : D.items).concat(r.data.items.map((x) => ({ id: x.id, bobot: 1 })));
+        if (ganti) D.items = D.items.filter((x) => bagOf(x) !== 'utama');
+        sisipBagian(D, 'utama', r.data.items.map((x) => ({ id: x.id, bobot: 1 })));
         D.ubah = true; renderSusunan(el);
         toast(r.message + (r.data.kekurangan.length ? ' Stok kurang di ' + r.data.kekurangan.length + ' baris kisi-kisi.' : '') + ' Tekan Simpan susunan.', r.data.kekurangan.length ? 'warn' : 'ok', 8000);
       } }] });
@@ -265,7 +355,8 @@
       .sort((a, b) => (b.pt > d.batasTab) - (a.pt > d.batasTab) || ({ terputus: 0, mengerjakan: 1, belum: 2, selesai: 3 }[a.status] - { terputus: 0, mengerjakan: 1, belum: 2, selesai: 3 }[b.status]) || a.nama.localeCompare(b.nama));
     const st = { mengerjakan: ['Mengerjakan', 'info'], terputus: ['Terputus', 'warn'], selesai: ['Selesai', 'ok'], belum: ['Belum mulai', 'polos'] };
     $('#mo-rows', el).innerHTML = list.map((r) => '<tr' + (r.pt > d.batasTab ? ' style="background:var(--bad-bg)"' : '') + '>' + (sa ? '<td>' + (r.sid && r.status !== 'selesai' ? '<input type="checkbox" data-msid="' + esc(r.sid) + '"' + (el.pilih.has(r.sid) ? ' checked' : '') + '>' : '') + '</td>' : '') +
-      '<td><b>' + esc(r.nama) + '</b><div class="kecil muted"><span class="mono">' + esc(r.nis) + '</span> · ' + esc(r.kelas) + (r.tambah ? ' · +' + r.tambah + ' mnt' : '') + '</div></td><td>' + lencana(st[r.status][0], st[r.status][1]) + (r.alasan && r.alasan !== 'dikumpulkan siswa' ? '<div class="kecil muted">' + esc(r.alasan) + '</div>' : '') + '</td>' +
+      '<td><b>' + esc(r.nama) + '</b><div class="kecil muted"><span class="mono">' + esc(r.nis) + '</span> · ' + esc(r.kelas) + (r.tambah ? ' · +' + r.tambah + ' mnt' : '') + '</div></td><td>' + lencana(st[r.status][0], st[r.status][1]) + (r.alasan && r.alasan !== 'dikumpulkan siswa' ? '<div class="kecil muted">' + esc(r.alasan) + '</div>' : '') +
+        (r.faseN > 1 && r.fase && r.status !== 'selesai' ? '<div class="kecil" style="margin-top:3px">' + (r.menunggu ? lencana('Jeda', 'polos') + ' menuju ' : 'Subtes ' + r.faseNo + '/' + r.faseN + ' · ') + '<b>' + esc(r.faseLabel) + '</b></div>' : '') + '</td>' +
       '<td style="min-width:150px"><div class="kecil"><b>' + r.dijawab + '</b> / ' + r.total + (r.ragu ? ' · ' + r.ragu + ' ragu' : '') + '</div>' + bar(r.total ? r.dijawab / r.total * 100 : 0, r.status === 'selesai' ? 'ok' : 'info') + '</td>' +
       '<td class="angka mono" data-sisa="' + (r.status === 'mengerjakan' || r.status === 'terputus' ? r.sisa : '') + '">' + (r.sisa == null ? '—' : r.status === 'selesai' ? '00:00' : fmt.jam(r.sisa)) + '</td>' +
       '<td class="angka">' + (r.pt > d.batasTab ? lencana(r.pt + '×', 'bad') : r.pt ? lencana(r.pt + '×', 'warn') : '<span class="muted">0</span>') + '</td><td class="kecil">' + (r.sync ? fmt.lalu(r.sync) : '—') + '</td>' +
@@ -287,7 +378,7 @@
     if (b.dataset.mo === 'segar') return muatMonitor(el, true);
     const sids = Array.from(el.pilih);
     let menit = 0;
-    if (b.dataset.mo === 'tambah') { const v = await tanya('Tambah waktu', 'Tambahan (menit)', '10', 'number'); if (!v) return; menit = +v; }
+    if (b.dataset.mo === 'tambah') { const v = await tanya('Tambah waktu', 'Tambahan (menit) untuk subtes yang sedang dikerjakan', '10', 'number'); if (!v) return; menit = +v; }
     if (b.dataset.mo === 'paksa' && !(await konfirmasi('Kumpulkan paksa ' + sids.length + ' sesi? Jawaban terakhir yang tersimpan akan dinilai.', { bahaya: true, ya: 'Kumpulkan' }))) return;
     if (b.dataset.mo === 'reset' && !(await konfirmasi('Izinkan ' + sids.length + ' siswa masuk lagi dari perangkat lain? Mereka perlu memasukkan token terbaru. Jawaban & sisa waktu tetap.', { ya: 'Reset sesi' }))) return;
     sibuk(b, true);
@@ -303,11 +394,11 @@
     judul: 'Hasil & Analisis', ikon: 'hasil', grup: 'Pelaksanaan & evaluasi', peran: SEMUA,
     render(el) {
       el.innerHTML = Admin.kepala('Hasil & analisis', 'Rekap nilai, penguasaan kompetensi per siswa dan kelas, serta kualitas butir soal.', '<select class="inp" id="h-paket" style="min-width:260px"></select>') +
-        '<div class="tab" id="h-tab" role="tablist"><button type="button" data-ht="rekap" class="aktif">Rekap</button><button type="button" data-ht="siswa">Per siswa</button><button type="button" data-ht="kelas">Per kelas</button><button type="button" data-ht="butir">Butir soal</button></div><div id="h-isi"></div>';
+        '<div class="tab" id="h-tab" role="tablist"><button type="button" data-ht="rekap" class="aktif">Rekap</button><button type="button" data-ht="siswa">Per siswa</button><button type="button" data-ht="kelas">Per kelas</button><button type="button" data-ht="butir">Butir soal</button><button type="button" data-ht="survei">Survei &amp; latihan</button></div><div id="h-isi"></div>';
       el.tab = 'rekap';
-      $('#h-paket', el).onchange = () => { el.rekap = null; el.siswa = null; muatHasil(el); };
+      $('#h-paket', el).onchange = () => { el.rekap = null; el.siswa = null; el.svKelas = ''; muatHasil(el); };
       el.addEventListener('click', (e) => aksiHasil(el, e));
-      el.addEventListener('change', (e) => { if (e.target.id === 'h-kelas') renderHasil(el); if (e.target.id === 'h-pilihsiswa') { el.sid = e.target.value; renderHasil(el); } });
+      el.addEventListener('change', (e) => { if (e.target.id === 'h-kelas') renderHasil(el); if (e.target.id === 'h-pilihsiswa') { el.sid = e.target.value; renderHasil(el); } if (e.target.id === 'h-svkelas') { el.svKelas = e.target.value; hasilSurvei(el); } });
     },
     async tampil(el) {
       const r = await api('paket.daftar', {});
@@ -332,6 +423,7 @@
     const d = el.rekap, box = $('#h-isi', el);
     $$('[data-ht]', el).forEach((b) => b.classList.toggle('aktif', b.dataset.ht === el.tab));
     if (el.tab === 'butir' && $('#h-paket', el).value) { box.innerHTML = '<div id="h-butir"><div class="memuat"></div></div>'; analisisButir(el, false); return; }
+    if (el.tab === 'survei' && $('#h-paket', el).value) { box.innerHTML = '<div id="h-survei"><div class="memuat"></div></div>'; hasilSurvei(el); return; }
     if (!d) {
       if (!$('#h-paket', el).value) { box.innerHTML = '<div class="kartu kosong"><strong>Belum ada hasil try out</strong>Hasil muncul setelah siswa menyelesaikan paket.</div>'; return; }
       box.innerHTML = '<div class="memuat">Memuat hasil…</div>';
@@ -387,6 +479,28 @@
         '<div style="background:var(--surface-2);padding:10px;border-radius:8px;margin:8px 0;white-space:pre-wrap">' + esc(p[5] || '(tidak dijawab)') + '</div><label class="kecil">Skor (0–' + p[2] + '): <input class="inp" type="number" step="0.25" min="0" max="' + p[2] + '" data-urai="' + esc(p[0]) + '" value="' + (p[3] === 'manual' ? '' : p[1]) + '" style="width:100px;display:inline-block"></label></div>').join('') +
         '<button class="btn utama" data-h="urai" data-sid="' + esc(sid) + '">Simpan nilai uraian</button></section>' : '');
   }
+  /** Rekap subtes survei (sebaran pilihan) & latihan (proporsi benar). Tidak memengaruhi nilai. */
+  async function hasilSurvei(el) {
+    const id = $('#h-paket', el).value, box = $('#h-survei', el);
+    if (!box) return;
+    const r = await api('hasil.survei', { idPaket: id, kelas: el.svKelas || '' });
+    if (!r.success) { box.innerHTML = '<div class="kartu kosong">' + esc(r.message) + '</div>'; return; }
+    const d = el.sv = r.data;
+    const item = (x) => {
+      const isi = Math.max(1, x.n - x.kosong);
+      return '<div class="survei-item"><div class="kecil muted"><b class="mono" style="color:var(--ink)">' + x.no + '.</b> <span class="chip-id">' + esc(x.id) + '</span> ' + Admin.bentuk(x.b) + (x.komp ? ' · ' + esc(x.komp) : '') + ' · ' + (x.n - x.kosong) + ' menjawab' +
+        (x.kosong ? ', ' + x.kosong + ' kosong' : '') + (x.rata != null && x.b === 'SKALA' ? ' · rata-rata posisi ' + fmt.angka(x.rata, 2) + ' dari ' + (x.opsi || []).length : '') + '</div><div style="margin:4px 0 6px">' + esc(x.ring) + '</div>' +
+        (x.opsi ? x.opsi.map((o) => '<div class="sebar"><span>' + esc(o.k) + '. ' + esc(o.t) + '</span>' + bar(o.n / isi * 100, 'info') + '<span class="mono" style="text-align:right">' + o.n + ' · ' + Math.round(o.n / isi * 100) + '%</span></div>').join('') : '') +
+        (x.teks && x.teks.length ? '<details style="margin-top:6px"><summary class="kecil" style="cursor:pointer">' + x.teks.length + ' jawaban teks</summary><ul class="kecil">' + x.teks.map((t) => '<li>' + esc(t) + '</li>').join('') + '</ul></details>' : '') + '</div>';
+    };
+    box.innerHTML = '<div class="saring"><select class="inp" id="h-svkelas" style="max-width:200px">' + opsi(d.kelas, el.svKelas || '', 'Semua kelas') + '</select><span class="kecil muted" style="flex:1">' + d.nSiswa + ' siswa selesai. Subtes survei &amp; latihan tidak memengaruhi nilai.</span>' +
+      ((d.survei.length || d.latihan.length) ? '<button type="button" class="btn" data-h="excelSurvei">' + ik('unduh') + 'Unduh Excel</button>' : '') + '</div>' +
+      (d.survei.length ? '<section class="kartu"><div class="kartu-kepala"><h2>' + esc(Admin.labelKat('survei')) + ' ' + Admin.kat('survei') + '</h2></div>' + d.survei.map(item).join('') + '</section>'
+        : '<div class="kartu kosong"><strong>Paket ini tidak memiliki subtes ' + esc(Admin.labelKat('survei')) + '</strong>Tambahkan soal berkategori survei di menu Paket TO.</div>') +
+      (d.latihan.length ? '<section class="kartu" style="margin-top:16px"><div class="kartu-kepala"><h2>' + esc(Admin.labelKat('latihan')) + ' ' + Admin.kat('latihan') + '</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th class="angka">No</th><th>Soal</th><th class="angka">Menjawab</th><th class="angka">Benar</th></tr></thead><tbody>' +
+        d.latihan.map((x) => '<tr><td class="angka mono">' + x.no + '</td><td><span class="chip-id">' + esc(x.id) + '</span> ' + Admin.bentuk(x.b) + '<div class="ringkas kecil">' + esc(x.ring) + '</div></td><td class="angka">' + (x.n - x.kosong) + '</td>' +
+          '<td class="angka">' + x.benar + (x.n ? ' <span class="kecil muted">(' + Math.round(x.benar / x.n * 100) + '%)</span>' : '') + '</td></tr>').join('') + '</tbody></table></div></section>' : '');
+  }
   async function analisisButir(el, hitung) {
     const id = $('#h-paket', el).value, box = $('#h-butir', el);
     if (hitung) { const r = await api('hasil.hitungButir', { idPaket: id }); toast(r.message, r.success ? 'ok' : 'err', 7000); }
@@ -420,6 +534,13 @@
       const r = await api('hasil.nilaiUraian', { sid: b.dataset.sid, nilai });
       toast(r.message, r.success ? 'ok' : 'err');
       if (r.success) { basi('hr_' + $('#h-paket', el).value); await muatHasil(el, true); }
+    }
+    if (b.dataset.h === 'excelSurvei' && el.sv) {
+      const d = el.sv, X = await Lib.xlsx(), wb = X.utils.book_new(), baris = [];
+      d.survei.forEach((x) => { (x.opsi || [{ k: '-', t: '(isian)', n: x.n - x.kosong }]).forEach((o) => baris.push({ No: x.no, ID: x.id, Pernyataan: x.ring, Pilihan: o.k + '. ' + o.t, Jumlah: o.n, Persen: Math.round(o.n / Math.max(1, x.n - x.kosong) * 100), Kosong: x.kosong })); });
+      if (baris.length) X.utils.book_append_sheet(wb, X.utils.json_to_sheet(baris), 'Survei');
+      if (d.latihan.length) X.utils.book_append_sheet(wb, X.utils.json_to_sheet(d.latihan.map((x) => ({ No: x.no, ID: x.id, Soal: x.ring, Menjawab: x.n - x.kosong, Benar: x.benar }))), 'Latihan');
+      X.writeFile(wb, 'survei-' + d.meta.id + (el.svKelas ? '-' + el.svKelas : '') + '.xlsx');
     }
     if (b.dataset.h === 'excel') {
       const d = el.rekap, X = await Lib.xlsx(), wb = X.utils.book_new(), kv = $('#h-kelas', el).value;
